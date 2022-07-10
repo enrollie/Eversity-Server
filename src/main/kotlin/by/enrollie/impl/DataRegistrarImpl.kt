@@ -3,14 +3,14 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/10/22, 11:50 PM
  */
 
 package by.enrollie.impl
 
 import by.enrollie.data_classes.*
+import by.enrollie.extensions.fromParserName
 import by.enrollie.providers.DataRegistrarProviderInterface
-import by.enrollie.providers.ProvidersCatalog
 import com.neitex.Credentials
 import com.neitex.SchoolsByParser
 import com.neitex.SchoolsByUserType

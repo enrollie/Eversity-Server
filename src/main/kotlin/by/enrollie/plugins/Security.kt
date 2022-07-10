@@ -3,14 +3,14 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/10/22, 11:41 PM
  */
 
 package by.enrollie.plugins
 
 import by.enrollie.data_classes.User
 import by.enrollie.data_classes.UserID
-import by.enrollie.providers.ProvidersCatalog
+import by.enrollie.impl.ProvidersCatalog
 import com.auth0.jwt.JWT
 import com.auth0.jwt.JWTVerifier
 import com.auth0.jwt.algorithms.Algorithm

@@ -3,14 +3,14 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/11/22, 12:25 AM
  */
 
 package by.enrollie.routes
 
 import by.enrollie.data_classes.UserID
+import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.plugins.jwtProvider
-import by.enrollie.providers.ProvidersCatalog
 import com.neitex.SchoolsByParser
 import io.ktor.http.*
 import io.ktor.server.application.*

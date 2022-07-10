@@ -3,11 +3,14 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/10/22, 11:41 PM
  */
 
-package by.enrollie.providers
+package by.enrollie.impl
 
+import by.enrollie.providers.ConfigurationProviderInterface
+import by.enrollie.providers.DataRegistrarProviderInterface
+import by.enrollie.providers.DatabaseProviderInterface
 import org.kodein.di.DI
 import org.kodein.di.DIAware
 import org.kodein.di.instance

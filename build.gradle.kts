@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/11/22, 12:21 AM
  */
 
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -17,12 +17,12 @@ plugins {
     application
     kotlin("jvm") version "1.7.0"
     id("org.jetbrains.kotlin.plugin.serialization") version "1.7.0"
-    id("eu.davidea.grabver") version "2.0.2"
+    id("io.wusa.semver-git-plugin") version "2.3.7"
     id("com.github.johnrengelman.shadow") version "7.0.0"
 }
 
 group = "by.enrollie"
-version = versioning.name
+version = semver.info
 application {
     mainClass.set("by.enrollie.ApplicationKt")
     val isDevelopment: Boolean = project.ext.has("development")
@@ -36,6 +36,7 @@ repositories {
 }
 
 dependencies {
+    implementation(project(":shared"))
     implementation("io.ktor:ktor-server-core-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-auth-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-auth-jwt-jvm:$ktorVersion")
@@ -66,17 +67,12 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
 }
 
-versioning {
-    major = 1
-    minor = 0
-}
-
 
 val compileKotlin: KotlinCompile by tasks
 compileKotlin.dependsOn.add((tasks.getByName("processResources") as ProcessResources).apply {
     filesMatching("selfInfo.properties") {
         val props = mutableMapOf<String, String>()
-        props["version"] = versioning.fullName
+        props["version"] = semver.info.toString()
         props["schoolsByParserVersion"] = schoolsByParserVersion
         props["buildTimestamp"] = (System.currentTimeMillis() / 1000).toString()
         expand(props)
@@ -90,6 +86,18 @@ tasks.register("cleanResources") {
     delete("$buildDir/resources")
     this.didWork = true
 }
-tasks.register("incrementVer") {
 
+semver {
+    snapshotSuffix = "SNAPSHOT"
+    dirtyMarker = "dirty"
+    initialVersion = "0.1.0"
+    branches { // list of branch configurations
+        branch {
+            regex = "main"
+            incrementer = "CONVENTIONAL_COMMITS_INCREMENTER"
+            formatter = Transformer {
+                "${it.version.major}.${it.version.minor}.${it.version.patch}+build.${it.count}"
+            }
+        }
+    }
 }

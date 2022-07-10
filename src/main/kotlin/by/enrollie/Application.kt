@@ -3,15 +3,15 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/11/22, 12:25 AM
  */
 
 package by.enrollie
 
-import by.enrollie.impl.DummyConfigurationProvider
-import by.enrollie.impl.DummyDatabaseImplemetation
+import by.enrollie.impl.*
 import by.enrollie.plugins.*
-import by.enrollie.providers.*
+import by.enrollie.providers.ConfigurationProviderInterface
+import by.enrollie.providers.DatabaseProviderInterface
 import com.neitex.SchoolsByParser
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
