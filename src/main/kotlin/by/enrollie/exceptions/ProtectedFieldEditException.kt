@@ -1,0 +1,14 @@
+/*
+ * Copyright © 2021 - 2022
+ * Author: Pavel Matusevich
+ * Licensed under GNU AGPLv3
+ * All rights are reserved.
+ * Last updated: 7/10/22, 11:16 PM
+ */
+
+package by.enrollie.exceptions
+
+class ProtectedFieldEditException(message: String) : Exception(message) {
+    override val message: String
+        get() = "You can't edit protected field"
+}
