@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/11/22, 12:57 AM
+ * Last updated: 7/15/22, 1:27 AM
  */
 
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -93,7 +93,7 @@ semver {
     initialVersion = "0.1.0"
     branches { // list of branch configurations
         branch {
-            regex = "main"
+            regex = ".+"
             incrementer = "CONVENTIONAL_COMMITS_INCREMENTER"
             formatter = Transformer {
                 "${it.version.major}.${it.version.minor}.${it.version.patch}+build.${it.count}"
