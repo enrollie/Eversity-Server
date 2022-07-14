@@ -3,14 +3,15 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/11/22, 12:25 AM
+ * Last updated: 7/15/22, 1:12 AM
  */
 
 package by.enrollie
 
 import by.enrollie.impl.*
 import by.enrollie.plugins.*
-import by.enrollie.providers.ConfigurationProviderInterface
+import by.enrollie.providers.ConfigurationInterface
+import by.enrollie.providers.DataRegistrarProviderInterface
 import by.enrollie.providers.DatabaseProviderInterface
 import com.neitex.SchoolsByParser
 import io.ktor.server.application.*
@@ -31,13 +32,14 @@ fun main() {
     // TODO: Make an initial configuration wizard
     run { // Configure providers
         val dependencies = DI {
-            bindSingleton<ConfigurationProviderInterface> { DummyConfigurationProvider() } // TODO: Replace with real providers
-            bindSingleton<DatabaseProviderInterface> { DummyDatabaseImplemetation() }
+            bindSingleton<ConfigurationInterface> { DummyConfigurationProvider() } // TODO: Replace with real providers
+            bindSingleton<DatabaseProviderInterface> { StubDatabaseImplementation() }
+            bindSingleton<DataRegistrarProviderInterface> { DataRegistrarImpl() }
         }
         setProvidersCatalog(ProvidersCatalogImpl(dependencies))
     }
     // Configure dependencies
-    SchoolsByParser.setSubdomain(ProvidersCatalog.configurationProvider.getConfiguration().SchoolsByConfiguration.baseUrl)
+    SchoolsByParser.setSubdomain(ProvidersCatalog.configurationProvider.schoolsByConfiguration.baseUrl)
     System.getenv()["SENTRY_DSN"]?.let {
         Sentry.init(it)
     }

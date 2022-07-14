@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:41 PM
+ * Last updated: 7/15/22, 1:10 AM
  */
 
 package by.enrollie.plugins
@@ -36,8 +36,8 @@ data class UserPrincipal(
 fun Application.configureSecurity() {
     authentication {
         jwt {
-            val jwtAudience = ProvidersCatalog.configurationProvider.getConfiguration().JwtConfiguration.audience
-            val secret = ProvidersCatalog.configurationProvider.getConfiguration().JwtConfiguration.secret
+            val jwtAudience = ProvidersCatalog.configurationProvider.jwtConfiguration.audience
+            val secret = ProvidersCatalog.configurationProvider.jwtConfiguration.secret
             jwtProvider = object : JwtProvider {
                 override fun getJwtVerifier(): JWTVerifier {
                     return JWT.require(Algorithm.HMAC256(secret)).withAudience(jwtAudience).build()

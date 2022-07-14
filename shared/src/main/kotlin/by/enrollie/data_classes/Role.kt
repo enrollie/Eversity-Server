@@ -3,21 +3,30 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/15/22, 1:25 AM
  */
 
 package by.enrollie.data_classes
 
 import by.enrollie.annotations.UnsafeAPI
+import by.enrollie.serializers.DateTimeSerializer
+import by.enrollie.serializers.RoleSerializer
 import org.joda.time.DateTime
 
 /**
  * Members of scopes define possible role IDs in the scope.
  */
 sealed class Roles private constructor() {
+
+    sealed interface RoleCategory {
+        fun roleByID(id: String): Role?
+    }
+
     sealed interface Role {
         class Field<T> private constructor(val id: String, val isRequired: Boolean) {
             override fun toString(): String = id
+
+            val type: T? = null
 
             companion object {
                 internal operator fun <T> invoke(role: Role, id: String, isRequired: Boolean): Field<T> =
@@ -25,16 +34,19 @@ sealed class Roles private constructor() {
             }
         }
 
+        fun fieldByID(id: String): Field<*>? = properties.firstOrNull { it.id == id }
+
         val properties: List<Field<*>>
 
         fun getID(): String = this.toString()
         override fun toString(): String
     }
 
-    object CLASS {
+    object CLASS : RoleCategory {
         class AbsenceProvider internal constructor() : Role {
             val classID = Role.Field<ClassID>(this, "classID", true)
             val delegatedBy = Role.Field<UserID>(this, "delegatedBy", true)
+
             override val properties: List<Role.Field<*>> = listOf(classID, delegatedBy)
 
             override fun toString(): String = "CLASS.AbsenceProvider"
@@ -60,23 +72,17 @@ sealed class Roles private constructor() {
         }
 
         val CLASS_TEACHER = ClassTeacher()
-    }
-
-    object LESSON {
-        class Teacher internal constructor() : Role {
-            val subjectID: Role.Field<LessonID> = Role.Field(this, "subjectID", true)
-            val classID: Role.Field<ClassID> = Role.Field(this, "classID", true)
-            val subgroupID: Role.Field<SubgroupID?> = Role.Field(this, "subgroupID", false)
-            override fun toString(): String = "LESSON.Teacher"
-            override val properties: List<Role.Field<*>> = listOf(subjectID, classID, subgroupID)
+        override fun roleByID(id: String): Role? = when (id.split(".")[1]) {
+            "AbsenceProvider" -> ABSENCE_PROVIDER
+            "Student" -> STUDENT
+            "ClassTeacher" -> CLASS_TEACHER
+            else -> null
         }
-
-        val TEACHER = Teacher()
     }
 
-    object SCHOOL {
-        class Principal internal constructor() : Role {
-            override fun toString(): String = "SCHOOL.Principal"
+    object SCHOOL : RoleCategory {
+        class Administration internal constructor() : Role {
+            override fun toString(): String = "SCHOOL.Administration"
             override fun equals(other: Any?): Boolean {
                 return this === other
             }
@@ -88,7 +94,7 @@ sealed class Roles private constructor() {
             override val properties: List<Role.Field<*>> = emptyList()
         }
 
-        val PRINCIPAL = Principal()
+        val ADMINISTRATION = Administration()
 
         class SocialTeacher internal constructor() : Role {
             override val properties: List<Role.Field<*>> = emptyList()
@@ -105,27 +111,18 @@ sealed class Roles private constructor() {
 
         val SOCIAL_TEACHER = SocialTeacher()
 
-        class VicePrincipal internal constructor() : Role {
-            override val properties: List<Role.Field<*>> = emptyList()
-
-            override fun toString(): String = "SCHOOL.VicePrincipal"
-            override fun equals(other: Any?): Boolean {
-                return this === other
-            }
-
-            override fun hashCode(): Int {
-                return System.identityHashCode(this)
-            }
+        override fun roleByID(id: String): Role? = when (id.split(".")[1]) {
+            "Administration" -> ADMINISTRATION
+            "SocialTeacher" -> SOCIAL_TEACHER
+            else -> null
         }
-
-        val VICE_PRINCIPAL = VicePrincipal()
     }
 
-    object SERVICE {
-        class Administrator internal constructor() : Role {
+    object SERVICE : RoleCategory {
+        class SystemAdministrator internal constructor() : Role {
             override val properties: List<Role.Field<*>> = emptyList()
 
-            override fun toString(): String = "SERVICE.Administrator"
+            override fun toString(): String = "SERVICE.SystemAdministrator"
             override fun equals(other: Any?): Boolean {
                 return this === other
             }
@@ -135,15 +132,41 @@ sealed class Roles private constructor() {
             }
         }
 
-        val ADMINISTRATOR = Administrator()
+        val SYSTEM_ADMINISTRATOR = SystemAdministrator()
+
+        override fun roleByID(id: String): Role? = when (id.split(".")[1]) {
+            "SystemAdministrator" -> SYSTEM_ADMINISTRATOR
+            else -> null
+        }
+    }
+
+    companion object {
+        fun getRoleByID(id: String): Role? = when (id.split(".")[0]) {
+            "CLASS" -> CLASS.roleByID(id)
+            "SCHOOL" -> SCHOOL.roleByID(id)
+            "SERVICE" -> SERVICE.roleByID(id)
+            else -> null
+        }
     }
 }
 
+class RoleInformationHolder(vararg information: Pair<Roles.Role.Field<*>, Any?>) {
+    private val information: Map<Roles.Role.Field<*>, Any?> = information.toMap()
+
+    @UnsafeAPI
+    fun getAsMap(): Map<Roles.Role.Field<*>, Any?> = information
+    operator fun get(field: Roles.Role.Field<*>): Any? = information[field]
+}
+
+@kotlinx.serialization.Serializable
 class RoleData<T : Roles.Role>(
     val userID: UserID,
     val role: T,
-    private val additionalInformation: Map<Roles.Role.Field<*>, Any?>,
+    @kotlinx.serialization.Serializable(with = RoleSerializer::class)
+    private val additionalInformation: RoleInformationHolder,
+    @kotlinx.serialization.Serializable(with = DateTimeSerializer::class)
     val roleGrantedDateTime: DateTime,
+    @kotlinx.serialization.Serializable(with = DateTimeSerializer::class)
     val roleRevokedDateTime: DateTime?
 ) {
     val roleID: String = role.toString()

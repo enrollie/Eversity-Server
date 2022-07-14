@@ -3,13 +3,14 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/15/22, 1:15 AM
  */
 
 package by.enrollie
 
 import by.enrollie.data_classes.Field
 import by.enrollie.data_classes.RoleData
+import by.enrollie.data_classes.RoleInformationHolder
 import by.enrollie.data_classes.Roles
 import org.joda.time.DateTime
 import org.junit.Test
@@ -31,7 +32,7 @@ class DataClassesTest {
         val validRoleData = RoleData(
             -1,
             Roles.CLASS.STUDENT,
-            mapOf(Roles.CLASS.STUDENT.classID to -1, Roles.CLASS.STUDENT.subgroups to listOf(-1)),
+            RoleInformationHolder(Roles.CLASS.STUDENT.classID to -1, Roles.CLASS.STUDENT.subgroups to listOf(-1)),
             DateTime.now(),
             null
         )
@@ -46,7 +47,7 @@ class DataClassesTest {
             RoleData(
                 -1,
                 Roles.CLASS.STUDENT,
-                mapOf(Roles.CLASS.STUDENT.subgroups to ""), // Not setting classID should throw an exception
+                RoleInformationHolder(Roles.CLASS.STUDENT.subgroups to ""), // Not setting classID should throw an exception
                 DateTime.now(),
                 null
             )

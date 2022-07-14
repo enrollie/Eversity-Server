@@ -15,11 +15,10 @@ actor User {
 
 resource School{
     permissions = ["read_statistics", "edit_absence"];
-    roles = ["SCHOOL.Principal", "SCHOOL.SocialTeacher", "SCHOOL.VicePrincipal"];
+    roles = ["SCHOOL.Administrator", "SCHOOL.SocialTeacher"];
 
-    "read_statistics" if "SCHOOL.Principal";
+    "read_statistics" if "SCHOOL.Administrator";
     "read_statistics" if "SCHOOL.SocialTeacher";
-    "read_statistics" if "SCHOOL.VicePrincipal";
     "edit_absence" if "read_statistics"; # May be changed in the future
 }
 
@@ -38,8 +37,7 @@ resource Class{
     "edit_absence" if "CLASS.AbsenceProvider";
     "edit_absence" if "edit_absence" on "school";
     "request_sync" if "CLASS.ClassTeacher";
-    "request_sync" if "SCHOOL.Principal" on "school";
-    "request_sync" if "SCHOOL.VicePrincipal" on "school";
+    "request_sync" if "SCHOOL.Administrator" on "school";
     "request_sync" if "SCHOOL.SocialTeacher" on "school";
 }
 
@@ -61,12 +59,12 @@ has_role(user: User, name: String, class: Class) if
     role.getRoleID() = name;
 
 has_permission(user: User, "read_absence", class: Class) if
-    lesson in RolesProvider.lessonRoles(user) and
+    lesson in LessonsProvider.getTodayLessons(user) and
     lesson.getClassID() = class.getId();
 
 has_permission(user: User, "edit_absence", class: Class) if
     has_permission(user, "read_absence", class) and
-    lesson in RolesProvider.lessonRoles(user) and
+    lesson in LessonsProvider.getTodayLessons(user) and
     TimeValidator.isCurrentLesson(lesson, class);
 
 has_permission(_: User, "read", _: Class);
@@ -76,7 +74,7 @@ has_relation(class: Class, "class", lesson: Lesson) if
 
 allow(user: User, "read_lessons", target: User) if
     (user.getId() = target.getId()) or
-    (role in RolesProvider.roles(user) and role.getRoleID().startsWith("SCHOOL")); # Users with school-wide roles can read any user's lessons
+    (role in RolesProvider.roles(user) and role.getRoleID().startsWith("SCHOOL")); # Users with any school-wide role `can read any user's lessons
 
 allow(user: User, action: String, class: Class) if
     has_permission(user, action, class);

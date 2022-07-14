@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/11/22, 12:25 AM
+ * Last updated: 7/15/22, 1:25 AM
  */
 
 package by.enrollie.routes
@@ -20,10 +20,6 @@ import io.ktor.server.routing.*
 import io.sentry.Breadcrumb
 import io.sentry.Sentry
 import io.sentry.SentryLevel
-import java.util.*
-import java.util.concurrent.ConcurrentHashMap
-
-val usersMap = ConcurrentHashMap<String, UserID>(100)
 
 private fun Route.Login() { // TODO: make a proper login system
     post("/login") {
@@ -53,13 +49,16 @@ private fun Route.Login() { // TODO: make a proper login system
                         LoginResponse(userID, jwtProvider.signToken(it, newToken.token))
                     )
                 }
-                val jobID = UUID.randomUUID().toString()
-                usersMap[jobID] = userID
-                call.response.headers.append(HttpHeaders.Location, "/")
+                val jobID = ProvidersCatalog.registrarProvider.addToRegister(userID, schCredentials)
+                call.response.headers.append(
+                    HttpHeaders.Location,
+                    "${ProvidersCatalog.configurationProvider.serverConfiguration.baseWebsocketUrl}/register/$jobID"
+                )
                 call.respond(HttpStatusCode.SeeOther)
             }
             false -> {
-
+                Sentry.captureException(result.exceptionOrNull()!!)
+                return@post call.respond(HttpStatusCode.InternalServerError) // TODO: Add Schools.by availability checker
             }
         }
     }

@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:37 PM
+ * Last updated: 7/14/22, 3:33 AM
  */
 
 package by.enrollie.providers
@@ -18,6 +18,7 @@ interface DatabaseProviderInterface {
     val classesProvider: DatabaseClassesProviderInterface
     val timetableProvider: DatabaseTimetableProviderInterface
     val authenticationDataProvider: DatabaseAuthenticationDataProviderInterface
+    val lessonsProvider: DatabaseLessonsProviderInterface
 }
 
 interface DatabaseUserProviderInterface {
@@ -86,20 +87,15 @@ interface DatabaseRolesProviderInterface {
     fun getAllRolesByMatch(match: (RoleData<*>) -> Boolean): List<RoleData<*>>
 
     /**
-     * Returns list of all roles with matching entry.
-     */
-    fun <T : Any> getAllRolesWithMatchingEntry(field: Field<T>, value: T): List<RoleData<*>>
-
-    /**
      * Returns list of all roles where all entries matching.
      */
-    fun getAllRolesWithMatchingEntries(map: Map<Field<*>, Any>): List<RoleData<*>>
+    fun getAllRolesWithMatchingEntries(vararg entries: Pair<Roles.Role.Field<*>, Any?>): List<RoleData<*>>
 
     /**
      * Updates role's entry.
      * @throws ProtectedFieldEditException if [field] is protected and cannot be updated
      */
-    fun <T : Any> updateRole(role: RoleData<*>, field: Field<T>, value: T)
+    fun <T : Any> updateRole(role: RoleData<*>, field: Roles.Role.Field<T>, value: T)
 
     /**
      * Revokes role (sets roleRevokedDateTime to [revokeDateTime] or, if null, to current time) from user.
@@ -150,21 +146,15 @@ interface DatabaseClassesProviderInterface {
      * @throws SchoolClassDoesNotExistException if class does not exist
      */
     fun getPupilsOrdering(classID: ClassID): List<Pair<UserID, Int>>
+
+    /**
+     * Sets ordering of pupils in class.
+     * @throws SchoolClassDoesNotExistException if class does not exist
+     */
+    fun setPupilsOrdering(classID: ClassID, pupilsOrdering: List<Pair<UserID, Int>>)
 }
 
 interface DatabaseLessonsProviderInterface {
-    /**
-     * Generates new lesson ID to be used in [createLesson]
-     * @throws NotStandaloneModeException if not in standalone mode
-     */
-    fun generateLessonID(): LessonID
-
-    /**
-     * Generates [count] lesson IDs to be used in [batchCreateLessons]
-     * @throws NotStandaloneModeException if not in standalone mode
-     */
-    fun generateManyLessonIDs(count: Int): List<LessonID>
-
     /**
      * Returns lesson by id (or null if lesson does not exist)
      */
@@ -182,17 +172,9 @@ interface DatabaseLessonsProviderInterface {
     fun createLesson(lesson: Lesson)
 
     /**
-     * Creates all given [lessons] in an optimized way. If an exception is thrown, the whole batch is aborted.
-     * @throws LessonIDConflictException if lesson with same ID already exists
+     * Updates existing lessons with same ID or creates new ones. Use this method to update or create multiple lessons at once.
      */
-    fun batchCreateLessons(lessons: List<Lesson>)
-
-    /**
-     * Updates lesson.
-     * @throws LessonDoesNotExistException if lesson does not exist
-     * @throws ProtectedFieldEditException if [field] is protected and cannot be updated
-     */
-    fun <T : Any> updateLesson(lessonID: LessonID, field: Field<T>, value: T)
+    fun createOrUpdateLessons(lessons: List<Lesson>)
 
     /**
      * Deletes lesson.
@@ -200,6 +182,17 @@ interface DatabaseLessonsProviderInterface {
      * @throws LessonDoesNotExistException if lesson does not exist
      */
     fun deleteLesson(lessonID: LessonID)
+
+    /**
+     * Returns a map of journalID corresponding to its title (or to null, if there is no such journal).
+     */
+    fun getJournalTitles(journals: List<JournalID>): Map<JournalID, String?>
+
+    /**
+     * Sets journal titles.
+     * @see batchCreateLessons
+     */
+    fun setJournalTitles(mappedTitles: Map<JournalID, String>)
 }
 
 interface DatabaseTimetableProviderInterface {
@@ -238,6 +231,20 @@ interface DatabaseTimetableProviderInterface {
      * Sets [TimetablePlaces] to the [timetablePlaces]
      */
     fun setTimetablePlaces(timetablePlaces: TimetablePlaces)
+
+    /**
+     * Returns [Timetable] (if any) of user with [teacherID] and active Teacher role
+     * @throws UserDoesNotExistException if user does not exist
+     * @thrown NoMatchingRoleException if user does not have Teacher role
+     */
+    fun getTimetableForTeacher(teacherID: UserID): Timetable?
+
+    /**
+     * Sets [Timetable]s for user with [teacherID] and active Teacher role
+     * @throws UserDoesNotExistException if user does not exist
+     * @throws NoMatchingRoleException if user does not have Teacher role
+     */
+    fun setTimetableForTeacher(teacherID: UserID, timetables: Pair<Timetable, Timetable>)
 }
 
 interface DatabaseAbsenceProviderInterface {

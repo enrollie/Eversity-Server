@@ -3,30 +3,38 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/15/22, 1:25 AM
  */
 
 package by.enrollie.impl
 
 import by.enrollie.data_classes.Declensions
-import by.enrollie.data_classes.Field
-import by.enrollie.providers.Configuration
-import by.enrollie.providers.ConfigurationProviderInterface
+import by.enrollie.providers.ConfigurationInterface
 
-class DummyConfigurationProvider : ConfigurationProviderInterface { //TODO: remove
-    override fun getConfiguration(): Configuration = Configuration(
-        Configuration.JwtConfigurationClass("secret", "Bearer"),
-        Configuration.SchoolConfigurationClass(
-            Declensions(
-                "группа", "группы", "групп", "группам", "группам", "группах"
-            )
-        ),
-        Configuration.SchoolsByConfigurationClass("https://demo.schools.by"),
-        Configuration.ServerConfigurationClass()
-    )
+class DummyConfigurationProvider : ConfigurationInterface {
+    override val jwtConfiguration: ConfigurationInterface.JwtConfigurationInterface =
+        object : ConfigurationInterface.JwtConfigurationInterface {
+            override val secret: String = "secret"
+            override val audience: String = "audience"
+        }
+    override val schoolConfiguration: ConfigurationInterface.SchoolConfigurationInterface =
+        object : ConfigurationInterface.SchoolConfigurationInterface {
+            override val title: Declensions
+                get() = TODO("Not yet implemented")
+        }
+    override val schoolsByConfiguration: ConfigurationInterface.SchoolsByConfigurationInterface =
+        object : ConfigurationInterface.SchoolsByConfigurationInterface {
+            override val baseUrl: String = "baseUrl"
+            override val recheckInterval: Long = 100000
+            override val recheckOnDownInterval: Long = 50000
+        }
+    override val serverConfiguration: ConfigurationInterface.ServerConfigurationInterface =
+        object : ConfigurationInterface.ServerConfigurationInterface {
+            override val baseHttpUrl: String = "https://localhost:8080"
+            override val baseWebsocketUrl: String = "wss://localhost:8080"
+        }
 
-    override fun <T : Any> updateConfiguration(field: Field<T>, newValue: T): Configuration {
-        println("Pretended to update field ${field.name.substringAfter("${Configuration::class.qualifiedName!!}\$")} to $newValue")
-        return getConfiguration()
-    }
+
+    override val isConfigured: Boolean = true
+
 }

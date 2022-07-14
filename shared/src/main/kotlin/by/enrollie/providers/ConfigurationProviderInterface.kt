@@ -3,39 +3,49 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:37 PM
+ * Last updated: 7/15/22, 1:25 AM
  */
 
 package by.enrollie.providers
 
 import by.enrollie.data_classes.Declensions
-import by.enrollie.data_classes.Field
 
 /**
- * Service configuration data class.
+ * Service configuration data class supplied by configuration plugin.
  */
-class Configuration(
-    val JwtConfiguration: JwtConfigurationClass,
-    val SchoolConfiguration: SchoolConfigurationClass,
-    val SchoolsByConfiguration: SchoolsByConfigurationClass,
-    val ServerConfiguration: ServerConfigurationClass,
-) {
-    class JwtConfigurationClass(
-        val secret: String, val audience: String
-    )
+interface ConfigurationInterface {
+    interface JwtConfigurationInterface {
+        val secret: String
+        val audience: String
+    }
 
-    class SchoolConfigurationClass(
-        val title: Declensions,
-    )
+    val jwtConfiguration: JwtConfigurationInterface
 
-    class SchoolsByConfigurationClass(
-        val baseUrl: String,
-    )
+    interface SchoolConfigurationInterface {
+        val title: Declensions
+    }
 
-    class ServerConfigurationClass
+    val schoolConfiguration: SchoolConfigurationInterface
+
+    interface SchoolsByConfigurationInterface {
+        val baseUrl: String
+        val recheckInterval: Long
+        val recheckOnDownInterval: Long
+    }
+
+    val schoolsByConfiguration: SchoolsByConfigurationInterface
+
+    interface ServerConfigurationInterface {
+        val baseHttpUrl: String
+        val baseWebsocketUrl: String
+    }
+
+    val serverConfiguration: ServerConfigurationInterface
+
+    /**
+     * Must answer the question: "Is everything configured correctly?"
+     * @return true if everything is configured correctly, false otherwise.
+     */
+    val isConfigured: Boolean
 }
 
-interface ConfigurationProviderInterface {
-    fun getConfiguration(): Configuration
-    fun <T : Any> updateConfiguration(field: Field<T>, newValue: T): Configuration
-}

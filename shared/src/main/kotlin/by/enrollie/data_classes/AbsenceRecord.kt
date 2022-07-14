@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:19 PM
+ * Last updated: 7/15/22, 1:07 AM
  */
 
 package by.enrollie.data_classes
@@ -31,7 +31,7 @@ fun createMatchableAbsenceRecord(
     classID,
     AbsenceType.OTHER,
     emptyList(),
-    RoleData(0, Roles.SERVICE.ADMINISTRATOR, mapOf(), DateTime.now(), null),
+    RoleData(0, Roles.SERVICE.SYSTEM_ADMINISTRATOR, RoleInformationHolder(), DateTime.now(), null),
     DateTime.now(),
     null,
     null

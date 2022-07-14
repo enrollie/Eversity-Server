@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/11/22, 12:21 AM
+ * Last updated: 7/11/22, 12:57 AM
  */
 
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -32,7 +32,7 @@ application {
 repositories {
     mavenCentral()
     maven { url = uri("https://maven.pkg.jetbrains.space/public/p/ktor/eap") }
-    maven { url = uri("https://packages.neitex.me") }
+    maven { url = uri("https://packages.neitex.me/releases") }
 }
 
 dependencies {
