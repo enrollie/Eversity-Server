@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/11/22, 1:27 AM
+ * Last updated: 7/15/22, 2:16 AM
  */
 
 plugins {
@@ -21,10 +21,10 @@ repositories {
 
 dependencies {
     implementation(kotlin("stdlib"))
-    implementation("joda-time:joda-time:2.10.14")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
-    implementation("org.jetbrains.kotlin:kotlin-reflect:1.7.10")
+    api("joda-time:joda-time:2.10.14")
+    api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3")
+    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
+    api("org.jetbrains.kotlin:kotlin-reflect:1.7.10")
 }
 
 publishing {

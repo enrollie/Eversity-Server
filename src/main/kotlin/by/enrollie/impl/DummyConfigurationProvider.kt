@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 1:25 AM
+ * Last updated: 7/15/22, 3:31 AM
  */
 
 package by.enrollie.impl
@@ -12,6 +12,7 @@ import by.enrollie.data_classes.Declensions
 import by.enrollie.providers.ConfigurationInterface
 
 class DummyConfigurationProvider : ConfigurationInterface {
+    override val configurationID: String = "Dummy"
     override val jwtConfiguration: ConfigurationInterface.JwtConfigurationInterface =
         object : ConfigurationInterface.JwtConfigurationInterface {
             override val secret: String = "secret"
