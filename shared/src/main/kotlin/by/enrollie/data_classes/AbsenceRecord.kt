@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 1:07 AM
+ * Last updated: 7/15/22, 3:09 AM
  */
 
 package by.enrollie.data_classes
@@ -12,6 +12,10 @@ import org.joda.time.DateTime
 import org.joda.time.LocalDate
 
 data class AbsenceRecord(
+    /**
+     * Absent student ID
+     * **NOTE:** User ID MUST be -1 if given absence record is a dummy one
+     */
     val studentData: RoleData<Roles.CLASS.Student>,
     val absenceDate: LocalDate,
     val classID: ClassID,

@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 1:27 AM
+ * Last updated: 7/15/22, 3:28 AM
  */
 
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -62,6 +62,11 @@ dependencies {
     implementation("org.kodein.di:kodein-di:7.12.0")
 
     implementation("com.neitex:schools_parser:$schoolsByParserVersion")
+
+    implementation("org.jline:jline:3.21.0")
+    implementation("org.fusesource.jansi:jansi:2.4.0")
+    implementation("org.jline:jline-terminal-jansi:3.21.0")
+
 
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")

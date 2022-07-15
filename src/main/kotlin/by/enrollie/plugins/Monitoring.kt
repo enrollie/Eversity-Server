@@ -3,8 +3,9 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/15/22, 3:35 AM
  */
+@file:Suppress("DEPRECATION") // New Relic Registry will throw that one deprecated exception
 
 package by.enrollie.plugins
 
@@ -19,7 +20,7 @@ import io.ktor.server.request.*
 import io.micrometer.core.instrument.config.MissingRequiredConfigurationException
 import org.slf4j.event.Level
 
-fun Application.configureMonitoring() {
+internal fun Application.configureMonitoring() {
     install(CallLogging) {
         level = Level.INFO
         filter { call -> call.request.path().startsWith("/") }

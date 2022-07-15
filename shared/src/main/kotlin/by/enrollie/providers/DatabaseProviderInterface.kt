@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/14/22, 3:33 AM
+ * Last updated: 7/15/22, 2:40 AM
  */
 
 package by.enrollie.providers
@@ -13,6 +13,11 @@ import by.enrollie.exceptions.*
 import org.joda.time.DateTime
 
 interface DatabaseProviderInterface {
+    /**
+     * Usually plugin ID
+     */
+    val databaseID: String
+
     val usersProvider: DatabaseUserProviderInterface
     val rolesProvider: DatabaseRolesProviderInterface
     val classesProvider: DatabaseClassesProviderInterface

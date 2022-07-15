@@ -3,13 +3,12 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:49 PM
+ * Last updated: 7/15/22, 2:13 AM
  */
 
 package by.enrollie.providers
 
 import by.enrollie.data_classes.UserID
-import com.neitex.Credentials
 import kotlinx.coroutines.flow.SharedFlow
 
 interface DataRegistrarProviderInterface {
@@ -38,5 +37,5 @@ interface DataRegistrarProviderInterface {
     /**
      * Puts registration request to the queue and returns UUID that will be used to identify request.
      */
-    fun addToRegister(userID: UserID, schoolsByCredentials: Credentials): String
+    fun addToRegister(userID: UserID, schoolsByCredentials: com.neitex.Credentials): String
 }

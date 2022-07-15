@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 1:25 AM
+ * Last updated: 7/15/22, 2:01 AM
  */
 
 package by.enrollie.routes
@@ -52,7 +52,7 @@ private fun Route.Login() { // TODO: make a proper login system
                 val jobID = ProvidersCatalog.registrarProvider.addToRegister(userID, schCredentials)
                 call.response.headers.append(
                     HttpHeaders.Location,
-                    "${ProvidersCatalog.configurationProvider.serverConfiguration.baseWebsocketUrl}/register/$jobID"
+                    "${ProvidersCatalog.configuration.serverConfiguration.baseWebsocketUrl}/register/$jobID"
                 )
                 call.respond(HttpStatusCode.SeeOther)
             }

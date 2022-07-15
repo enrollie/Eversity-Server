@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/15/22, 3:38 AM
  */
 
 package by.enrollie.plugins
@@ -15,7 +15,7 @@ import io.ktor.server.application.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.*
 
-fun Application.configureStatusPages() {
+internal fun Application.configureStatusPages() {
     install(StatusPages) {
         exception<NotFoundException> { call, _ ->
             call.respond(HttpStatusCode.NotFound)
@@ -24,7 +24,8 @@ fun Application.configureStatusPages() {
             call.respond(HttpStatusCode.Forbidden)
         }
         exception<Throwable> { call, cause ->
-            call.respond(HttpStatusCode.InternalServerError, cause.message ?: "Internal Server Error")
+            call.respond(HttpStatusCode.InternalServerError)
+
         }
     }
 }

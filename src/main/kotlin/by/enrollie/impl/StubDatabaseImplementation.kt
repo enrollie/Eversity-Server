@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 1:25 AM
+ * Last updated: 7/15/22, 3:32 AM
  */
 
 package by.enrollie.impl
@@ -19,6 +19,7 @@ import java.util.*
  * Expect many requests to fail.
  */
 class StubDatabaseImplementation : DatabaseProviderInterface {
+    override val databaseID: String = "DummyDatabase"
     override val usersProvider: DatabaseUserProviderInterface = object : DatabaseUserProviderInterface {
         override fun getUser(userID: UserID): User? {
             return when (userID) {

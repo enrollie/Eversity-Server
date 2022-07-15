@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/15/22, 1:44 AM
  */
 
 package by.enrollie.plugins
@@ -12,7 +12,7 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
 
-fun Application.configureSerialization() {
+internal fun Application.configureSerialization() {
     install(ContentNegotiation) {
         json()
     }
