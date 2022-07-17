@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 2:16 AM
+ * Last updated: 7/17/22, 9:28 PM
  */
 
 plugins {
@@ -25,6 +25,10 @@ dependencies {
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3")
     api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
     api("org.jetbrains.kotlin:kotlin-reflect:1.7.10")
+}
+
+java {
+    withSourcesJar()
 }
 
 publishing {
@@ -66,7 +70,7 @@ publishing {
                 }
             }
             groupId = "by.enrollie"
-            artifactId = "eversity_api"
+            artifactId = "eversity-shared-api"
             version = rootProject.version.toString()
 
             from(components["java"])

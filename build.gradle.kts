@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 3:28 AM
+ * Last updated: 7/17/22, 9:35 PM
  */
 
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -89,13 +89,18 @@ tasks.processResources {
 }
 tasks.register("cleanResources") {
     delete("$buildDir/resources")
-    this.didWork = true
+    didWork = true
+}
+tasks.register("getVersion") {
+    println("Current version: ${semver.info}")
+    didWork = true
 }
 
 semver {
     snapshotSuffix = "SNAPSHOT"
     dirtyMarker = "dirty"
     initialVersion = "0.1.0"
+    tagType = io.wusa.TagType.LIGHTWEIGHT
     branches { // list of branch configurations
         branch {
             regex = ".+"
