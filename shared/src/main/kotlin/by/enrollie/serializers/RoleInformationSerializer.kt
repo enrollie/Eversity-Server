@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 1:25 AM
+ * Last updated: 7/17/22, 10:44 PM
  */
 
 package by.enrollie.serializers
@@ -20,7 +20,7 @@ import kotlinx.serialization.descriptors.mapSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
-class RoleSerializer : KSerializer<RoleInformationHolder> {
+class RoleInformationSerializer : KSerializer<RoleInformationHolder> {
     @OptIn(ExperimentalSerializationApi::class)
     override val descriptor: SerialDescriptor = mapSerialDescriptor<String, String>()
 
