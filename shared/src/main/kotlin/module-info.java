@@ -1,5 +1,4 @@
 module Eversity.shared {
-    requires org.joda.time;
     requires kotlin.stdlib;
     requires kotlin.reflect;
     requires kotlinx.serialization.core;

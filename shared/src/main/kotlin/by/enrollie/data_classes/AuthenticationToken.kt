@@ -3,13 +3,13 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:19 PM
+ * Last updated: 7/17/22, 10:22 PM
  */
 
 package by.enrollie.data_classes
 
-import org.joda.time.DateTime
+import java.time.LocalDateTime
 
 data class AuthenticationToken(
-    val token: String, val userID: UserID, val issueDateTime: DateTime
+    val token: String, val userID: UserID, val issueDateTime: LocalDateTime
 )

@@ -3,14 +3,16 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 2:40 AM
+ * Last updated: 7/17/22, 10:23 PM
  */
+@file:Suppress("UNUSED")
 
 package by.enrollie.providers
 
 import by.enrollie.data_classes.*
 import by.enrollie.exceptions.*
-import org.joda.time.DateTime
+import java.time.LocalDate
+import java.time.LocalDateTime
 
 interface DatabaseProviderInterface {
     /**
@@ -78,6 +80,7 @@ interface DatabaseRolesProviderInterface {
 
     /**
      * Appends generated roles to users.
+     * @throws UserDoesNotExistException if any user does not exist
      */
     fun batchAppendRolesToUsers(users: List<UserID>, roleGenerator: (UserID) -> RoleData<*>)
 
@@ -99,6 +102,7 @@ interface DatabaseRolesProviderInterface {
     /**
      * Updates role's entry.
      * @throws ProtectedFieldEditException if [field] is protected and cannot be updated
+     * @throws IllegalArgumentException if [field] is not valid for this class
      */
     fun <T : Any> updateRole(role: RoleData<*>, field: Roles.Role.Field<T>, value: T)
 
@@ -106,7 +110,7 @@ interface DatabaseRolesProviderInterface {
      * Revokes role (sets roleRevokedDateTime to [revokeDateTime] or, if null, to current time) from user.
      * @throws UserDoesNotExistException if user does not exist
      */
-    fun revokeRoleFromUser(userID: UserID, role: RoleData<*>, revokeDateTime: DateTime?)
+    fun revokeRoleFromUser(userID: UserID, role: RoleData<*>, revokeDateTime: LocalDateTime?)
 
     /**
      * Deletes role from user.
@@ -143,6 +147,7 @@ interface DatabaseClassesProviderInterface {
      * Updates class.
      * @throws SchoolClassDoesNotExistException if class does not exist
      * @throws ProtectedFieldEditException if [field] is protected and cannot be updated
+     * @throws IllegalArgumentException if [field] is not valid for this class
      */
     fun <T : Any> updateClass(classID: ClassID, field: Field<T>, value: T)
 
@@ -155,6 +160,8 @@ interface DatabaseClassesProviderInterface {
     /**
      * Sets ordering of pupils in class.
      * @throws SchoolClassDoesNotExistException if class does not exist
+     * @throws UserDoesNotExistException if any pupil does not exist
+     * @throws IllegalArgumentException if [pupilsOrdering] is not a permutation of all pupils in class or if sorted values are not consecutive, or if values are not unique.
      */
     fun setPupilsOrdering(classID: ClassID, pupilsOrdering: List<Pair<UserID, Int>>)
 }
@@ -167,8 +174,21 @@ interface DatabaseLessonsProviderInterface {
 
     /**
      * Returns list of all lessons for given [classID]
+     * @throws SchoolClassDoesNotExistException if class does not exist
      */
     fun getLessonsForClass(classID: ClassID): List<Lesson>
+
+    /**
+     * Returns list of all lessons for given [classID] in [datesRange]
+     * @throws SchoolClassDoesNotExistException if class does not exist
+     */
+    fun getLessonsForClass(classID: ClassID, datesRange: Pair<LocalDate, LocalDate>): List<Lesson>
+
+    /**
+     * Returns list of all lessons for given [classID] for given [date]
+     * @throws SchoolClassDoesNotExistException if class does not exist
+     */
+    fun getLessonsForClass(classID: ClassID, date: LocalDate): List<Lesson>
 
     /**
      * Creates new lesson.
@@ -178,6 +198,7 @@ interface DatabaseLessonsProviderInterface {
 
     /**
      * Updates existing lessons with same ID or creates new ones. Use this method to update or create multiple lessons at once.
+     * @throws SchoolClassDoesNotExistException if class in one of the lessons does not exist
      */
     fun createOrUpdateLessons(lessons: List<Lesson>)
 
@@ -195,7 +216,7 @@ interface DatabaseLessonsProviderInterface {
 
     /**
      * Sets journal titles.
-     * @see batchCreateLessons
+     * @see createOrUpdateLessons
      */
     fun setJournalTitles(mappedTitles: Map<JournalID, String>)
 }
@@ -203,26 +224,31 @@ interface DatabaseLessonsProviderInterface {
 interface DatabaseTimetableProviderInterface {
     /**
      * Returns timetable for given [classID]
+     * @throws SchoolClassDoesNotExistException if class does not exist
      */
     fun getCurrentTimetableForClass(classID: ClassID): Timetable?
 
     /**
      * Searches for timetable for given [classID] that was in effect at given [dateTime]
+     * @throws SchoolClassDoesNotExistException if class does not exist
      */
-    fun getArchivedTimetableForClass(classID: ClassID, dateTime: DateTime): Timetable?
+    fun getArchivedTimetableForClass(classID: ClassID, dateTime: LocalDateTime): Timetable?
 
     /**
      * Sets previous timetable (if any) as outdated and replaces it with [timetable]
+     * @throws SchoolClassDoesNotExistException if class does not exist
      */
     fun changeTimetableForClass(classID: ClassID, timetable: Timetable)
 
     /**
      * Replaces current timetable with [timetable] without making current timetable (if any) outdated.
+     * @throws SchoolClassDoesNotExistException if class does not exist
      */
     fun setTimetableForClass(classID: ClassID, timetable: Timetable)
 
     /**
      * Deletes timetable for given [classID] without making current timetable (if any) outdated.
+     * @throws SchoolClassDoesNotExistException if class does not exist
      */
     fun deleteCurrentTimetableForClass(classID: ClassID)
 
@@ -254,22 +280,31 @@ interface DatabaseTimetableProviderInterface {
 
 interface DatabaseAbsenceProviderInterface {
     /**
-     * Returns a list of all absence records for given [userID] in given [dateRange]
+     * Returns a list of all absence records for given [userID] in given [datesRange]
+     * @throws UserDoesNotExistException if user does not exist
      */
-    fun getAbsencesForUser(userID: UserID, dateRange: Pair<DateTime, DateTime>): List<AbsenceRecord>
+    fun getAbsencesForUser(userID: UserID, datesRange: Pair<LocalDate, LocalDate>): List<AbsenceRecord>
 
     /**
-     * Returns a list of all absence records for given [classID] in given [dateRange]
+     * Returns a list of all absence records for given [classID] in given [datesRange]
+     * @throws SchoolClassDoesNotExistException if class does not exist
      */
-    fun getAbsencesForClass(classID: ClassID, dateRange: Pair<DateTime, DateTime>): List<AbsenceRecord>
+    fun getAbsencesForClass(classID: ClassID, datesRange: Pair<LocalDate, LocalDate>): List<AbsenceRecord>
 
     /**
-     * Returns list of class ids for which no absence was recorded at the given [dateTime]
+     * Returns a list of all absence records for given [classID] for given [date]
+     * @throws SchoolClassDoesNotExistException if class does not exist
      */
-    fun getClassesWithoutAbsenceInfo(dateTime: DateTime): List<ClassID>
+    fun getAbsencesForClass(classID: ClassID, date: LocalDate): List<AbsenceRecord>
+
+    /**
+     * Returns list of class ids for which no absence was recorded at the given [date]
+     */
+    fun getClassesWithoutAbsenceInfo(date: LocalDate): List<ClassID>
 
     /**
      * Updates an absence record.
+     * @throws UserDoesNotExistException if user does not exist
      * @throws NoSuchElementException if absence record does not exist
      * @throws ProtectedFieldEditException if [field] is protected and cannot be updated
      */
@@ -279,11 +314,13 @@ interface DatabaseAbsenceProviderInterface {
 
     /**
      * Creates an [absence]. If similar absence already exists, it is updated.
+     * @throws UserDoesNotExistException if user does not exist
      */
     fun createAbsence(userID: UserID, absence: AbsenceRecord)
 
     /**
      * Creates all given [absences] in an optimized way. If similar single absence record already exists, it is updated.
+     * @throws UserDoesNotExistException if user does not exist
      */
     fun createAbsences(userID: UserID, absences: List<AbsenceRecord>)
 
@@ -296,11 +333,13 @@ interface DatabaseAbsenceProviderInterface {
 interface DatabaseAuthenticationDataProviderInterface {
     /**
      * Returns all user tokens
+     * @throws UserDoesNotExistException if user does not exist
      */
     fun getUserTokens(userID: UserID): List<AuthenticationToken>
 
     /**
      * Creates a new unique token for [userID].
+     * @throws UserDoesNotExistException if user does not exist
      */
     fun generateNewToken(userID: UserID): AuthenticationToken
 
@@ -319,5 +358,3 @@ interface DatabaseAuthenticationDataProviderInterface {
      */
     fun checkToken(token: String, userID: UserID): Boolean
 }
-
-interface Database

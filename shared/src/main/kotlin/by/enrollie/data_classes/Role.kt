@@ -3,15 +3,16 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 1:25 AM
+ * Last updated: 7/17/22, 10:23 PM
  */
+@file:Suppress("UNUSED")
 
 package by.enrollie.data_classes
 
 import by.enrollie.annotations.UnsafeAPI
-import by.enrollie.serializers.DateTimeSerializer
+import by.enrollie.serializers.LocalDateTimeSerializer
 import by.enrollie.serializers.RoleSerializer
-import org.joda.time.DateTime
+import java.time.LocalDateTime
 
 /**
  * Members of scopes define possible role IDs in the scope.
@@ -162,12 +163,9 @@ class RoleInformationHolder(vararg information: Pair<Roles.Role.Field<*>, Any?>)
 class RoleData<T : Roles.Role>(
     val userID: UserID,
     val role: T,
-    @kotlinx.serialization.Serializable(with = RoleSerializer::class)
-    private val additionalInformation: RoleInformationHolder,
-    @kotlinx.serialization.Serializable(with = DateTimeSerializer::class)
-    val roleGrantedDateTime: DateTime,
-    @kotlinx.serialization.Serializable(with = DateTimeSerializer::class)
-    val roleRevokedDateTime: DateTime?
+    @kotlinx.serialization.Serializable(with = RoleSerializer::class) private val additionalInformation: RoleInformationHolder,
+    @kotlinx.serialization.Serializable(with = LocalDateTimeSerializer::class) val roleGrantedDateTime: LocalDateTime,
+    @kotlinx.serialization.Serializable(with = LocalDateTimeSerializer::class) val roleRevokedDateTime: LocalDateTime?
 ) {
     val roleID: String = role.toString()
 
