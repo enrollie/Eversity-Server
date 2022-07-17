@@ -3,9 +3,11 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:19 PM
+ * Last updated: 7/17/22, 10:22 PM
  */
 
 package by.enrollie.exceptions
 
-class UserDoesNotExistException(message: String) : Exception(message)
+import by.enrollie.data_classes.UserID
+
+class UserDoesNotExistException(userID: UserID) : Exception("User with ID $userID does not exist")

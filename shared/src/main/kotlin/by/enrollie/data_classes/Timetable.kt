@@ -3,22 +3,21 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/11/22, 5:00 PM
+ * Last updated: 7/17/22, 10:22 PM
  */
 
 package by.enrollie.data_classes
 
 import kotlinx.serialization.Serializable
-import org.joda.time.DateTime
 import java.time.DayOfWeek
-import java.util.*
+import java.time.LocalDate
+import java.time.LocalDateTime
 
 typealias TimetablePlace = Int
 
 @Serializable
 data class TimetableLessonCell(
-    val place: TimetablePlace,
-    val title: String
+    val place: TimetablePlace, val title: String
 )
 
 data class Timetable(
@@ -29,8 +28,8 @@ data class Timetable(
     val friday: List<TimetableLessonCell>,
     val saturday: List<TimetableLessonCell>,
     val sunday: List<TimetableLessonCell>,
-    val effectiveSince: DateTime,
-    val effectiveUntil: DateTime?
+    val effectiveSince: LocalDateTime,
+    val effectiveUntil: LocalDateTime?
 ) {
     operator fun get(day: DayOfWeek): List<TimetableLessonCell> = when (day) {
         DayOfWeek.MONDAY -> monday
@@ -42,14 +41,14 @@ data class Timetable(
         DayOfWeek.SUNDAY -> sunday
     }
 
-    operator fun get(date: Date): List<TimetableLessonCell> = when (val day = DateTime(date).dayOfWeek) {
-        DayOfWeek.MONDAY.value -> monday
-        DayOfWeek.TUESDAY.value -> tuesday
-        DayOfWeek.WEDNESDAY.value -> wednesday
-        DayOfWeek.THURSDAY.value -> thursday
-        DayOfWeek.FRIDAY.value -> friday
-        DayOfWeek.SATURDAY.value -> saturday
-        DayOfWeek.SUNDAY.value -> sunday
+    operator fun get(date: LocalDate): List<TimetableLessonCell> = when (val day = date.dayOfWeek) {
+        DayOfWeek.MONDAY -> monday
+        DayOfWeek.TUESDAY -> tuesday
+        DayOfWeek.WEDNESDAY -> wednesday
+        DayOfWeek.THURSDAY -> thursday
+        DayOfWeek.FRIDAY -> friday
+        DayOfWeek.SATURDAY -> saturday
+        DayOfWeek.SUNDAY -> sunday
         else -> throw IllegalArgumentException("Invalid day of week: $day")
     }
 
