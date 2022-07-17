@@ -3,16 +3,17 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:19 PM
+ * Last updated: 7/18/22, 2:18 AM
  */
 
 package by.enrollie.data_classes
 
 import java.time.LocalDateTime
 
+typealias TimetablePlace = Int
+
 data class TimetablePlaces(
-    private val firstShift: Map<TimetablePlace, EventConstraints>,
-    private val secondShift: Map<TimetablePlace, EventConstraints>
+    val firstShift: Map<TimetablePlace, EventConstraints>, val secondShift: Map<TimetablePlace, EventConstraints>
 ) {
     operator fun get(shift: TeachingShift, place: TimetablePlace): EventConstraints? = when (shift) {
         TeachingShift.FIRST -> firstShift[place]

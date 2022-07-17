@@ -3,15 +3,13 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 1:25 AM
+ * Last updated: 7/18/22, 2:14 AM
  */
 
 package by.enrollie.impl
 
 import by.enrollie.data_classes.*
 import by.enrollie.extensions.fromParserName
-import by.enrollie.extensions.fromParserTimetable
-import by.enrollie.extensions.toPairOfTimetables
 import by.enrollie.plugins.jwtProvider
 import by.enrollie.providers.DataRegistrarProviderInterface
 import com.neitex.Credentials
@@ -25,12 +23,12 @@ import io.sentry.kotlin.SentryContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import org.joda.time.DateTime
+import java.time.LocalDateTime
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 class DataRegistrarImpl : DataRegistrarProviderInterface {
-    private val uuidsMap = ConcurrentHashMap<String, Pair<UserID, Credentials>>()
+    private val uuidsMap = ConcurrentHashMap<String, Pair<UserID, Credentials>>(100)
     private val processingUsers = ConcurrentSet<UserID>()
     private val broadcaster = MutableSharedFlow<DataRegistrarProviderInterface.Message>(5, 500)
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -56,10 +54,10 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
 
     init {
         val supervisor = SupervisorJob()
-        val handler = CoroutineExceptionHandler { coroutineContext, throwable ->
+        val handler = CoroutineExceptionHandler { _, throwable ->
             Sentry.captureException(throwable, Hint())
         }
-        CoroutineScope(Dispatchers.IO + supervisor).launch {
+        (scope + supervisor).launch {
             jobsBroadcaster.collect {
                 launch(handler + SentryContext()) {
                     registerUser(it.first, it.second, it.third)
@@ -196,15 +194,6 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
                             mapOf()
                         )
                     )
-                    val timetable = SchoolsByParser.CLASS.getTimetable(schoolClass.id, credentials, true).fold({
-                        Timetable.fromParserTimetable(it)
-                    }, {
-                        Sentry.captureException(it)
-                        broadcaster.emit(
-                            errorMessage(uuid)
-                        )
-                        return
-                    })
                     val subgroups = SchoolsByParser.CLASS.getSubgroups(schoolClass.id, credentials).fold({
                         it
                     }, {
@@ -213,9 +202,7 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
                         return
                     })
                     val lessons = SchoolsByParser.CLASS.getAllLessons(
-                        schoolClass.id,
-                        subgroups.associate { it.subgroupID to it.title },
-                        credentials
+                        schoolClass.id, subgroups.associate { it.subgroupID to it.title }, credentials
                     ).fold({
                         it.filterNot { it.journalID == null }.map {
                             Lesson(
@@ -281,25 +268,20 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
                     ProvidersCatalog.databaseProvider.rolesProvider.batchAppendRolesToUsers(pupils.map { it.id }) { pupil ->
                         RoleData(pupil,
                             Roles.CLASS.STUDENT,
-                            RoleInformationHolder(
-                                Roles.CLASS.STUDENT.classID to schoolClass.id,
+                            RoleInformationHolder(Roles.CLASS.STUDENT.classID to schoolClass.id,
                                 Roles.CLASS.STUDENT.subgroups to subgroups.filter { it.pupils.contains(pupil) }
                                     .map { it.subgroupID }.toList()
                             ),
-                            transfers[pupil]?.second?.let {
-                                DateTime(it)
-                            } ?: DateTime.now(),
-                            null)
+                            transfers[pupil]?.second?.atStartOfDay() ?: LocalDateTime.now(),
+                            null
+                        )
                     }
-                    ProvidersCatalog.databaseProvider.timetableProvider.setTimetableForClass(
-                        schoolClass.id, timetable
-                    )
                     ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
                         userID, RoleData(
                             userID,
                             Roles.CLASS.CLASS_TEACHER,
                             RoleInformationHolder(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id),
-                            DateTime.now(),
+                            LocalDateTime.now(),
                             null
                         )
                     )
@@ -330,7 +312,7 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
                             userID,
                             Roles.CLASS.CLASS_TEACHER,
                             RoleInformationHolder(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id),
-                            DateTime.now(),
+                            LocalDateTime.now(),
                             null
                         )
                     )
@@ -343,28 +325,23 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
                     DataRegistrarProviderInterface.Message(
                         uuid,
                         DataRegistrarProviderInterface.MessageType.INFORMATION,
-                        "Ищем ваше расписание и завершаем регистрацию...",
+                        "Завершаем регистрацию...",
                         totalTeacherSteps,
                         totalTeacherSteps,
                         mapOf()
                     )
                 )
-                val timetable = SchoolsByParser.TEACHER.getTimetable(userID, credentials).fold({
-                    it.toPairOfTimetables()
-                }, {
-                    Sentry.captureException(it)
-                    broadcaster.emit(errorMessage(uuid))
-                    return
-                })
-                Sentry.addBreadcrumb(Breadcrumb.info("Found timetable for teacher $userID"))
-                ProvidersCatalog.databaseProvider.timetableProvider.setTimetableForTeacher(
-                    userID, timetable
-                )
                 if (user.type == SchoolsByUserType.ADMINISTRATION) {
                     Sentry.addBreadcrumb(Breadcrumb.info("User is a part of school administration"))
                     ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
                         userID,
-                        RoleData(userID, Roles.SCHOOL.ADMINISTRATION, RoleInformationHolder(), DateTime.now(), null)
+                        RoleData(
+                            userID,
+                            Roles.SCHOOL.ADMINISTRATION,
+                            RoleInformationHolder(),
+                            LocalDateTime.now(),
+                            null
+                        )
                     )
                 }
                 val token = ProvidersCatalog.databaseProvider.authenticationDataProvider.generateNewToken(userID)

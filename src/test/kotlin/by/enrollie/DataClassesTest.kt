@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 1:15 AM
+ * Last updated: 7/18/22, 2:14 AM
  */
 
 package by.enrollie
@@ -12,8 +12,8 @@ import by.enrollie.data_classes.Field
 import by.enrollie.data_classes.RoleData
 import by.enrollie.data_classes.RoleInformationHolder
 import by.enrollie.data_classes.Roles
-import org.joda.time.DateTime
 import org.junit.Test
+import java.time.LocalDateTime
 import kotlin.test.assertFailsWith
 
 class DataClassesTest {
@@ -33,7 +33,7 @@ class DataClassesTest {
             -1,
             Roles.CLASS.STUDENT,
             RoleInformationHolder(Roles.CLASS.STUDENT.classID to -1, Roles.CLASS.STUDENT.subgroups to listOf(-1)),
-            DateTime.now(),
+            LocalDateTime.now(),
             null
         )
         assert(validRoleData.role == Roles.CLASS.STUDENT)
@@ -48,7 +48,7 @@ class DataClassesTest {
                 -1,
                 Roles.CLASS.STUDENT,
                 RoleInformationHolder(Roles.CLASS.STUDENT.subgroups to ""), // Not setting classID should throw an exception
-                DateTime.now(),
+                LocalDateTime.now(),
                 null
             )
         }

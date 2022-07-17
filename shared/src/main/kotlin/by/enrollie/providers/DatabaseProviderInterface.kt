@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/17/22, 10:23 PM
+ * Last updated: 7/18/22, 2:14 AM
  */
 @file:Suppress("UNUSED")
 
@@ -23,7 +23,7 @@ interface DatabaseProviderInterface {
     val usersProvider: DatabaseUserProviderInterface
     val rolesProvider: DatabaseRolesProviderInterface
     val classesProvider: DatabaseClassesProviderInterface
-    val timetableProvider: DatabaseTimetableProviderInterface
+    val timetablePlacingProvider: DatabaseTimetablePlacingProviderInterface
     val authenticationDataProvider: DatabaseAuthenticationDataProviderInterface
     val lessonsProvider: DatabaseLessonsProviderInterface
 }
@@ -111,13 +111,6 @@ interface DatabaseRolesProviderInterface {
      * @throws UserDoesNotExistException if user does not exist
      */
     fun revokeRoleFromUser(userID: UserID, role: RoleData<*>, revokeDateTime: LocalDateTime?)
-
-    /**
-     * Deletes role from user.
-     * **IMPORTANT:** This method is destructive and cannot be undone.
-     * @throws UserDoesNotExistException if user does not exist
-     */
-    fun deleteRole(userID: UserID, role: RoleData<*>)
 }
 
 interface DatabaseClassesProviderInterface {
@@ -221,61 +214,22 @@ interface DatabaseLessonsProviderInterface {
     fun setJournalTitles(mappedTitles: Map<JournalID, String>)
 }
 
-interface DatabaseTimetableProviderInterface {
+interface DatabaseTimetablePlacingProviderInterface {
     /**
-     * Returns timetable for given [classID]
-     * @throws SchoolClassDoesNotExistException if class does not exist
-     */
-    fun getCurrentTimetableForClass(classID: ClassID): Timetable?
-
-    /**
-     * Searches for timetable for given [classID] that was in effect at given [dateTime]
-     * @throws SchoolClassDoesNotExistException if class does not exist
-     */
-    fun getArchivedTimetableForClass(classID: ClassID, dateTime: LocalDateTime): Timetable?
-
-    /**
-     * Sets previous timetable (if any) as outdated and replaces it with [timetable]
-     * @throws SchoolClassDoesNotExistException if class does not exist
-     */
-    fun changeTimetableForClass(classID: ClassID, timetable: Timetable)
-
-    /**
-     * Replaces current timetable with [timetable] without making current timetable (if any) outdated.
-     * @throws SchoolClassDoesNotExistException if class does not exist
-     */
-    fun setTimetableForClass(classID: ClassID, timetable: Timetable)
-
-    /**
-     * Deletes timetable for given [classID] without making current timetable (if any) outdated.
-     * @throws SchoolClassDoesNotExistException if class does not exist
-     */
-    fun deleteCurrentTimetableForClass(classID: ClassID)
-
-    /**
-     * Returns [TimetablePlaces].
+     * Returns [TimetablePlaces] effective now.
      * @throws IllegalStateException if timetable is not set.
      */
     fun getTimetablePlaces(): TimetablePlaces
 
     /**
-     * Sets [TimetablePlaces] to the [timetablePlaces]
+     * Get [TimetablePlaces] effective on given [date].
      */
-    fun setTimetablePlaces(timetablePlaces: TimetablePlaces)
+    fun getTimetablePlaces(date: LocalDate): TimetablePlaces?
 
     /**
-     * Returns [Timetable] (if any) of user with [teacherID] and active Teacher role
-     * @throws UserDoesNotExistException if user does not exist
-     * @thrown NoMatchingRoleException if user does not have Teacher role
+     * Sets [TimetablePlaces] and changes previous (if any) timetablePlaces revoking date to current one.
      */
-    fun getTimetableForTeacher(teacherID: UserID): Timetable?
-
-    /**
-     * Sets [Timetable]s for user with [teacherID] and active Teacher role
-     * @throws UserDoesNotExistException if user does not exist
-     * @throws NoMatchingRoleException if user does not have Teacher role
-     */
-    fun setTimetableForTeacher(teacherID: UserID, timetables: Pair<Timetable, Timetable>)
+    fun updateTimetablePlaces(timetablePlaces: TimetablePlaces)
 }
 
 interface DatabaseAbsenceProviderInterface {

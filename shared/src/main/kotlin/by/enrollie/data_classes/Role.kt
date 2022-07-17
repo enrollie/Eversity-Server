@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/17/22, 10:44 PM
+ * Last updated: 7/18/22, 2:14 AM
  */
 @file:Suppress("UNUSED")
 
@@ -152,11 +152,17 @@ sealed class Roles private constructor() {
 }
 
 class RoleInformationHolder(vararg information: Pair<Roles.Role.Field<*>, Any?>) {
-    private val information: Map<Roles.Role.Field<*>, Any?> = information.toMap()
+    private val information: Map<String, Any?> = information.map { it.first.id to it.second }.toMap()
 
     @UnsafeAPI
-    fun getAsMap(): Map<Roles.Role.Field<*>, Any?> = information
-    operator fun get(field: Roles.Role.Field<*>): Any? = information[field]
+    fun getAsMap(): Map<Roles.Role.Field<*>, Any?> =
+        information.map { Roles.getRoleByID(it.key)!!.fieldByID(it.key)!! to it.value }
+            .toMap() // NPE isn't possible as it was initialized with real Fields.
+
+    @UnsafeAPI
+    fun getAsStringMap(): Map<String, Any?> = information
+
+    operator fun get(field: Roles.Role.Field<*>): Any? = information[field.id]
 }
 
 @kotlinx.serialization.Serializable
