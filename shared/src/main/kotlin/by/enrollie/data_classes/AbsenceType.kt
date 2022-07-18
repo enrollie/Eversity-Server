@@ -3,11 +3,12 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:19 PM
+ * Last updated: 7/18/22, 2:52 AM
  */
 
 package by.enrollie.data_classes
 
+@kotlinx.serialization.Serializable
 enum class AbsenceType {
     ILLNESS {
         override val russianName: String = "Болезнь"

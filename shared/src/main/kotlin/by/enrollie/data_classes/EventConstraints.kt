@@ -3,15 +3,19 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/18/22, 3:01 AM
  */
 
 package by.enrollie.data_classes
 
+import by.enrollie.serializers.LocalTimeSerializer
 import java.time.LocalTime
 
+@kotlinx.serialization.Serializable
 data class EventConstraints(
+    @kotlinx.serialization.Serializable(with = LocalTimeSerializer::class)
     val startTime: LocalTime,
+    @kotlinx.serialization.Serializable(with = LocalTimeSerializer::class)
     val endTime: LocalTime
 ) {
     // Checks if event is in time constraints

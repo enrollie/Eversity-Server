@@ -3,11 +3,12 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:47 PM
+ * Last updated: 7/18/22, 3:03 AM
  */
 
 package by.enrollie.data_classes
 
+@kotlinx.serialization.Serializable
 data class Name(
     val first: String, val middle: String? = null, val last: String
 ) {

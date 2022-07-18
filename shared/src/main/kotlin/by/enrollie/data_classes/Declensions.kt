@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:19 PM
+ * Last updated: 7/18/22, 2:56 AM
  */
 
 package by.enrollie.data_classes
@@ -12,6 +12,7 @@ package by.enrollie.data_classes
  * Stores russian declension name / titles.
  * All comments are in Russian.
  */
+@kotlinx.serialization.Serializable
 data class Declensions(
     /**
      * Именительный падеж.
