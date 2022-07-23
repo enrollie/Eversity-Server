@@ -3,11 +3,12 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 7/23/22, 3:41 AM
  */
 
 package by.enrollie.logback
 
+import by.enrollie.impl.CommandLine
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.PatternLayout
 import ch.qos.logback.classic.spi.ILoggingEvent
@@ -55,7 +56,7 @@ class CustomAppender : AppenderBase<ILoggingEvent>() {
     private val layout = IntelliJLikeLayout()
     override fun append(eventObject: ILoggingEvent) {
         layout.doLayout(eventObject)?.let {
-            println(it)
+            CommandLine.instance.writeMessage(it)
         }
     }
 

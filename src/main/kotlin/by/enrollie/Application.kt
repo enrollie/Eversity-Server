@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 3:38 AM
+ * Last updated: 7/23/22, 3:48 AM
  */
 
 package by.enrollie
@@ -22,6 +22,7 @@ import io.sentry.Sentry
 import org.joda.time.DateTime
 import org.kodein.di.DI
 import org.kodein.di.bindSingleton
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.lang.module.ModuleFinder
 import java.util.*
@@ -30,6 +31,7 @@ import kotlin.io.path.Path
 
 lateinit var APPLICATION_METADATA: ApplicationMetadata
 fun main() {
+    val logger = LoggerFactory.getLogger("BOOTSTRAP")
     val (metadata, schoolsByParserVersion) = run {
         val selfProperties =
             (Unit::class as Any).javaClass.classLoader.getResourceAsStream("selfInfo.properties")?.use {
@@ -44,7 +46,8 @@ fun main() {
         } to selfProperties.getProperty("schoolsByParserVersion"))
     }
     APPLICATION_METADATA = metadata
-    CommandLine.instance.writeMessage("Starting ${metadata.title} (built on: ${DateTime(metadata.buildTimestamp * 1000)}...")
+
+    logger.info("Starting ${metadata.title} (built on: ${DateTime(metadata.buildTimestamp * 1000)})...")
     val plugins = run { // Configure providers
         val layer = run { // Configure layer
             File("plugins").mkdir()
@@ -53,28 +56,27 @@ fun main() {
             val pluginsConfiguration =
                 ModuleLayer.boot().configuration().resolve(pluginsFinder, ModuleFinder.of(), pluginNames)
             ModuleLayer.boot().defineModulesWithOneLoader(pluginsConfiguration, ClassLoader.getSystemClassLoader())
-
         }
 
         val database = getServices<DatabaseProviderInterface>(layer).let {
             require(it.size == 1) { "Exactly one database provider must be registered, however ${it.size} are found (IDs: ${it.map { it.databaseID }})" }
             it.first()
         }
-        CommandLine.instance.writeMessage("Using database: ${database.databaseID}")
+        logger.info("Using database: ${database.databaseID}")
         val configuration = getServices<ConfigurationInterface>(layer).let {
             require(it.size == 1) { "Exactly one configuration provider must be registered, however ${it.size} are found (IDs: ${it.map { it.configurationID }})" }
             it.first()
         }
-        CommandLine.instance.writeMessage("Using configuration: ${configuration.configurationID}")
+        logger.info("Using configuration: ${configuration.configurationID}")
         val plugins = getServices<PluginMetadataInterface>(layer)
         val addedPlugins = setOf<String>()
         plugins.forEach {
             if (it.title in addedPlugins) {
                 throw IllegalStateException("Found another plugin with the same title: ${it.title} (its version is ${it.version})")
             }
-            CommandLine.instance.writeMessage("Loading plugin ${it.title} v${it.version} (author: ${it.author})")
+            logger.info("Loading plugin ${it.title} v${it.version} (author: ${it.author})")
             it.onLoad()
-            CommandLine.instance.writeMessage("Loaded plugin ${it.title} v${it.version}")
+            logger.info("Loaded plugin ${it.title} v${it.version}")
         }
 
         val dependencies = DI {
@@ -88,14 +90,17 @@ fun main() {
     }
     // Configure dependencies
     SchoolsByParser.setSubdomain(ProvidersCatalog.configuration.schoolsByConfiguration.baseUrl)
+    logger.debug("SchoolsByParser subdomain: ${SchoolsByParser.schoolSubdomain}")
     System.getenv()["SENTRY_DSN"]?.let {
         Sentry.init(it)
+        logger.debug("Sentry initialized")
     }
     Sentry.configureScope {
         it.setTag("schools-by-subdomain", SchoolsByParser.schoolSubdomain)
         it.setTag("schools-by-parser-version", schoolsByParserVersion)
         it.setTag("version", metadata.version)
     }
+    logger.debug("Starting embedded server...")
 
     embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
         configureKtorPlugins()
