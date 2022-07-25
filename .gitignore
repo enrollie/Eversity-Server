@@ -12,7 +12,7 @@
 .idea/**/usage.statistics.xml
 .idea/**/dictionaries
 .idea/**/shelf
-.idea/**/misc.xml
+.idea/misc.xml
 
 # Generated files
 .idea/**/contentModel.xml
@@ -83,7 +83,6 @@ rest-client.private.env.json
 
 # *.iml
 # modules.xml
-# .idea/misc.xml
 # *.ipr
 
 # Sonarlint plugin
