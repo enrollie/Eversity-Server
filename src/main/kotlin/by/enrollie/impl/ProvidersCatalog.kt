@@ -3,17 +3,14 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 3:38 AM
+ * Last updated: 7/25/22, 2:58 PM
  */
 
 package by.enrollie.impl
 
 import by.enrollie.annotations.UnsafeAPI
 import by.enrollie.privateProviders.AbsenceManagerInterface
-import by.enrollie.providers.CommandLineInterface
-import by.enrollie.providers.ConfigurationInterface
-import by.enrollie.providers.DataRegistrarProviderInterface
-import by.enrollie.providers.DatabaseProviderInterface
+import by.enrollie.providers.*
 import org.kodein.di.DI
 import org.kodein.di.DIAware
 import org.kodein.di.instance
@@ -24,6 +21,7 @@ interface ProvidersCatalogInterface {
     val configuration: ConfigurationInterface
     val commandLine: CommandLineInterface
     val absenceManager: AbsenceManagerInterface
+    val authorization: AuthorizationInterface
 }
 
 class ProvidersCatalogImpl(override val di: DI) : ProvidersCatalogInterface, DIAware {
@@ -32,6 +30,7 @@ class ProvidersCatalogImpl(override val di: DI) : ProvidersCatalogInterface, DIA
     override val configuration: ConfigurationInterface by instance()
     override val commandLine: CommandLineInterface by instance()
     override val absenceManager: AbsenceManagerInterface by instance()
+    override val authorization: AuthorizationInterface by instance()
 }
 
 private var providersCatalogField: ProvidersCatalogInterface? = null

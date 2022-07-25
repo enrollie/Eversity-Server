@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/23/22, 3:41 AM
+ * Last updated: 7/25/22, 2:58 PM
  */
 
 package by.enrollie.logback
@@ -21,7 +21,7 @@ import org.joda.time.DateTime
 class IntelliJLikeLayoutWithoutColors : PatternLayout() {
     override fun doLayout(event: ILoggingEvent?): String? {
         event ?: return null
-        val timestamp = DateTime.now().toString("YYYY-MM-dd hh:mm:ss,SSS")
+        val timestamp = DateTime.now().toString("YYYY-MM-dd HH:mm:ss,SSS")
         return "$timestamp [${event.threadName}]   ${event.level.levelStr} - ${event.loggerName} - ${event.formattedMessage}\n".let {
             (if (event.throwableProxy != null) {
                 it + "\t" + ThrowableProxyUtil.asString(event.throwableProxy)

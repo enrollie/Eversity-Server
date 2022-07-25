@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/23/22, 3:48 AM
+ * Last updated: 7/25/22, 2:58 PM
  */
 
 package by.enrollie
@@ -14,11 +14,17 @@ import by.enrollie.plugins.configureKtorPlugins
 import by.enrollie.plugins.configureStartStopListener
 import by.enrollie.privateProviders.ApplicationMetadata
 import by.enrollie.providers.*
+import by.enrollie.routes.registerAllRoutes
 import by.enrollie.util.getServices
 import com.neitex.SchoolsByParser
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.ktor.server.routing.*
 import io.sentry.Sentry
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.joda.time.DateTime
 import org.kodein.di.DI
 import org.kodein.di.bindSingleton
@@ -48,6 +54,7 @@ fun main() {
     APPLICATION_METADATA = metadata
 
     logger.info("Starting ${metadata.title} (built on: ${DateTime(metadata.buildTimestamp * 1000)})...")
+    val pluginsCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     val plugins = run { // Configure providers
         val layer = run { // Configure layer
             File("plugins").mkdir()
@@ -57,33 +64,51 @@ fun main() {
                 ModuleLayer.boot().configuration().resolve(pluginsFinder, ModuleFinder.of(), pluginNames)
             ModuleLayer.boot().defineModulesWithOneLoader(pluginsConfiguration, ClassLoader.getSystemClassLoader())
         }
+        val plugins = getServices<PluginMetadataInterface>(layer)
+        val addedPlugins = mutableSetOf<String>()
+        plugins.forEach {
+            pluginsCoroutineScope.launch {
+                if (it.title in addedPlugins) {
+                    throw IllegalStateException("Found another plugin with the same title: ${it.title} (its version is ${it.version})")
+                }
+                if (it.pluginApiVersion != APPLICATION_METADATA.version) {
+                    logger.error("Plugin ${it.title} (version ${it.version}) was built for plugin API version ${it.pluginApiVersion}, but this server is running version ${APPLICATION_METADATA.version}. This plugin won't be loaded.")
+                    return@launch
+                }
+                logger.info("Loading plugin ${it.title} v${it.version} (author: ${it.author})")
+                it.onLoad()
+                logger.info("Loaded plugin ${it.title} v${it.version}")
+                addedPlugins += it.title
+            }
+        }
 
         val database = getServices<DatabaseProviderInterface>(layer).let {
-            require(it.size == 1) { "Exactly one database provider must be registered, however ${it.size} are found (IDs: ${it.map { it.databaseID }})" }
+            require(it.size == 1) { "Exactly one database provider must be registered, however ${it.size} are found (IDs: ${it.map { it.databasePluginID }})" }
             it.first()
         }
-        logger.info("Using database: ${database.databaseID}")
+        if (database.databasePluginID !in addedPlugins) {
+            throw IllegalStateException("Database provider ${database.databasePluginID} is not loaded")
+        }
+        logger.info("Using database: ${database.databasePluginID}")
         val configuration = getServices<ConfigurationInterface>(layer).let {
-            require(it.size == 1) { "Exactly one configuration provider must be registered, however ${it.size} are found (IDs: ${it.map { it.configurationID }})" }
+            require(it.size == 1) { "Exactly one configuration provider must be registered, however ${it.size} are found (IDs: ${it.map { it.configurationPluginID }})" }
             it.first()
         }
-        logger.info("Using configuration: ${configuration.configurationID}")
-        val plugins = getServices<PluginMetadataInterface>(layer)
-        val addedPlugins = setOf<String>()
-        plugins.forEach {
-            if (it.title in addedPlugins) {
-                throw IllegalStateException("Found another plugin with the same title: ${it.title} (its version is ${it.version})")
-            }
-            logger.info("Loading plugin ${it.title} v${it.version} (author: ${it.author})")
-            it.onLoad()
-            logger.info("Loaded plugin ${it.title} v${it.version}")
+        if (configuration.configurationPluginID !in addedPlugins) {
+            throw IllegalStateException("Configuration storage ${configuration.configurationPluginID} is not loaded")
         }
+        logger.info("Using configuration storage: ${configuration.configurationPluginID}")
+        if (!configuration.isConfigured) {
+            logger.error("Configuration storage plugin reported that configuration is not present. Please, configure it accordingly to its manual.")
+        }
+
 
         val dependencies = DI {
             bindSingleton { configuration }
             bindSingleton { database }
             bindSingleton<DataRegistrarProviderInterface> { DataRegistrarImpl() }
             bindSingleton<CommandLineInterface> { CommandLine.instance }
+            bindSingleton<AuthorizationInterface> { AuthorizationProviderImpl() }
         }
         @OptIn(UnsafeAPI::class) setProvidersCatalog(ProvidersCatalogImpl(dependencies))
         plugins
@@ -100,11 +125,14 @@ fun main() {
         it.setTag("schools-by-parser-version", schoolsByParserVersion)
         it.setTag("version", metadata.version)
     }
-    logger.debug("Starting embedded server...")
+    logger.debug("Starting server...")
 
     embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
         configureKtorPlugins()
         configureStartStopListener(plugins)
+        routing {
+            registerAllRoutes()
+        }
     }
 
     plugins.forEach {

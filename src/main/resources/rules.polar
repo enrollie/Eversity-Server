@@ -65,7 +65,8 @@ has_permission(user: User, "read_absence", class: Class) if
 has_permission(user: User, "edit_absence", class: Class) if
     has_permission(user, "read_absence", class) and
     lesson in LessonsProvider.getTodayLessons(user) and
-    TimeValidator.isCurrentLesson(lesson, class);
+    lesson.getClassID() = class.getId() and
+    TimeValidator.isCurrentLesson(lesson);
 
 has_permission(_: User, "read", _: Class);
 
