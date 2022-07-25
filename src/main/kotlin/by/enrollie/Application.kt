@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/25/22, 2:58 PM
+ * Last updated: 7/25/22, 6:05 PM
  */
 
 package by.enrollie
@@ -68,17 +68,17 @@ fun main() {
         val addedPlugins = mutableSetOf<String>()
         plugins.forEach {
             pluginsCoroutineScope.launch {
-                if (it.title in addedPlugins) {
-                    throw IllegalStateException("Found another plugin with the same title: ${it.title} (its version is ${it.version})")
+                if (it.name in addedPlugins) {
+                    throw IllegalStateException("Found another plugin with the same title: ${it.name} (its version is ${it.version})")
                 }
                 if (it.pluginApiVersion != APPLICATION_METADATA.version) {
-                    logger.error("Plugin ${it.title} (version ${it.version}) was built for plugin API version ${it.pluginApiVersion}, but this server is running version ${APPLICATION_METADATA.version}. This plugin won't be loaded.")
+                    logger.error("Plugin ${it.name} (version ${it.version}) was built for plugin API version ${it.pluginApiVersion}, but this server is running version ${APPLICATION_METADATA.version}. This plugin won't be loaded.")
                     return@launch
                 }
-                logger.info("Loading plugin ${it.title} v${it.version} (author: ${it.author})")
+                logger.info("Loading plugin ${it.name} v${it.version} (author: ${it.author})")
                 it.onLoad()
-                logger.info("Loaded plugin ${it.title} v${it.version}")
-                addedPlugins += it.title
+                logger.info("Loaded plugin ${it.name} v${it.version}")
+                addedPlugins += it.name
             }
         }
 
