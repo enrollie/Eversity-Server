@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/18/22, 2:14 AM
+ * Last updated: 7/25/22, 2:45 PM
  */
 @file:Suppress("UNUSED")
 
@@ -16,9 +16,9 @@ import java.time.LocalDateTime
 
 interface DatabaseProviderInterface {
     /**
-     * Usually plugin ID
+     * Must be equal to the plugin ID.
      */
-    val databaseID: String
+    val databasePluginID: String
 
     val usersProvider: DatabaseUserProviderInterface
     val rolesProvider: DatabaseRolesProviderInterface
@@ -182,6 +182,21 @@ interface DatabaseLessonsProviderInterface {
      * @throws SchoolClassDoesNotExistException if class does not exist
      */
     fun getLessonsForClass(classID: ClassID, date: LocalDate): List<Lesson>
+
+    /**
+     * Returns list of all lessons for user with given [teacherID] and Teacher role
+     */
+    fun getLessonsForTeacher(teacherID: UserID): List<Lesson>
+
+    /**
+     * Returns list of lessons for given [teacherID] and Teacher role in [datesRange]
+     */
+    fun getLessonsForTeacher(teacherID: UserID, datesRange: Pair<LocalDate, LocalDate>): List<Lesson>
+
+    /**
+     * Returns list of lessons for given [teacherID] and Teacher role for given [date]
+     */
+    fun getLessonsForTeacher(teacherID: UserID, date: LocalDate): List<Lesson>
 
     /**
      * Creates new lesson.

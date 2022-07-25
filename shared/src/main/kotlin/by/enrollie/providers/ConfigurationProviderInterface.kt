@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 3:38 AM
+ * Last updated: 7/25/22, 2:45 PM
  */
 
 package by.enrollie.providers
@@ -15,9 +15,9 @@ import by.enrollie.data_classes.Declensions
  */
 interface ConfigurationInterface {
     /**
-     * Usually plugin ID
+     * Must be equal to the plugin ID.
      */
-    val configurationID: String
+    val configurationPluginID: String
 
     interface JwtConfigurationInterface {
         val secret: String

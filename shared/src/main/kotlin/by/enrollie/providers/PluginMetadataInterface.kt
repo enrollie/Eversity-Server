@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 2:22 AM
+ * Last updated: 7/25/22, 2:19 PM
  */
 
 package by.enrollie.providers
@@ -28,6 +28,11 @@ interface PluginMetadataInterface {
      * @return author of the plugin
      */
     val author: String
+
+    /**
+     * Version of plugin API that this plugin was built for.
+     */
+    val pluginApiVersion: String
 
     /**
      * Called when the plugin is loaded.
