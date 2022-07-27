@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/27/22, 10:55 PM
+ * Last updated: 7/28/22, 12:19 AM
  */
 @file:Suppress("UNUSED")
 
@@ -26,6 +26,7 @@ interface DatabaseProviderInterface {
     val timetablePlacingProvider: DatabaseTimetablePlacingProviderInterface
     val authenticationDataProvider: DatabaseAuthenticationDataProviderInterface
     val lessonsProvider: DatabaseLessonsProviderInterface
+    val absenceProvider: DatabaseAbsenceProviderInterface
 }
 
 interface DatabaseUserProviderInterface {
