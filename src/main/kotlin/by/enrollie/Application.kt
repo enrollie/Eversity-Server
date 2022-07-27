@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/25/22, 6:05 PM
+ * Last updated: 7/28/22, 12:01 AM
  */
 
 package by.enrollie
@@ -21,6 +21,7 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.routing.*
 import io.sentry.Sentry
+import io.sentry.SentryOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -66,14 +67,20 @@ fun main() {
         }
         val plugins = getServices<PluginMetadataInterface>(layer)
         val addedPlugins = mutableSetOf<String>()
+        val loadAnyVersion = System.getenv()["EVERSITY_LOAD_EVERY_PLUGIN"]?.toBooleanStrictOrNull() ?: false
+        if (loadAnyVersion) {
+            logger.warn("EVERSITY_LOAD_EVERY_PLUGIN is set to true. All plugins will be loaded regardless of API version they were built against.")
+        }
         plugins.forEach {
             pluginsCoroutineScope.launch {
                 if (it.name in addedPlugins) {
                     throw IllegalStateException("Found another plugin with the same title: ${it.name} (its version is ${it.version})")
                 }
-                if (it.pluginApiVersion != APPLICATION_METADATA.version) {
+                if (it.pluginApiVersion != APPLICATION_METADATA.version && !loadAnyVersion) {
                     logger.error("Plugin ${it.name} (version ${it.version}) was built for plugin API version ${it.pluginApiVersion}, but this server is running version ${APPLICATION_METADATA.version}. This plugin won't be loaded.")
                     return@launch
+                } else if (it.pluginApiVersion != APPLICATION_METADATA.version && loadAnyVersion) {
+                    logger.warn("Plugin ${it.name} (version ${it.version}) was built for plugin API version ${it.pluginApiVersion}, but this server is running version ${APPLICATION_METADATA.version}. This plugin will be loaded, but it might not work as expected.")
                 }
                 logger.info("Loading plugin ${it.name} v${it.version} (author: ${it.author})")
                 it.onLoad()
@@ -100,6 +107,7 @@ fun main() {
         logger.info("Using configuration storage: ${configuration.configurationPluginID}")
         if (!configuration.isConfigured) {
             logger.error("Configuration storage plugin reported that configuration is not present. Please, configure it accordingly to its manual.")
+            throw IllegalStateException("Configuration storage plugin reported that configuration is not present.")
         }
 
 
@@ -117,7 +125,14 @@ fun main() {
     SchoolsByParser.setSubdomain(ProvidersCatalog.configuration.schoolsByConfiguration.baseUrl)
     logger.debug("SchoolsByParser subdomain: ${SchoolsByParser.schoolSubdomain}")
     System.getenv()["SENTRY_DSN"]?.let {
-        Sentry.init(it)
+        Sentry.init(SentryOptions().apply {
+            dsn = it
+            isPrintUncaughtStackTrace = true
+            if (System.getenv()["EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY"]?.toBooleanStrictOrNull() == true) {
+                logger.warn("EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY is set to true. All exceptions will be logged, but not sent to Sentry.")
+                this.setBeforeSend { _, _ -> null }
+            }
+        })
         logger.debug("Sentry initialized")
     }
     Sentry.configureScope {
@@ -133,9 +148,10 @@ fun main() {
         routing {
             registerAllRoutes()
         }
-    }
-
+    }.start(true)
+    logger.info("Server is shut down, unloading plugins...")
     plugins.forEach {
         it.onUnload()
     }
+    logger.info("All plugins are unloaded. Goodbye and have a nice day! :)")
 }

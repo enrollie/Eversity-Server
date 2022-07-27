@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/25/22, 2:58 PM
+ * Last updated: 7/28/22, 12:01 AM
  */
 
 package by.enrollie.impl
@@ -54,7 +54,9 @@ class AuthorizationProviderImpl : AuthorizationInterface {
         oso.registerConstant(LessonsProvider(), "LessonsProvider")
         oso.registerConstant(TimeValidator(), "TimeValidator")
         oso.registerConstant(RolesProvider(), "RolesProvider")
-        oso.loadStr(this::class.java.getResourceAsStream("./rules.polar")!!.readBytes().decodeToString())
+        oso.loadStr(
+            (Unit::class as Any).javaClass.classLoader.getResourceAsStream("rules.polar")!!.readBytes().decodeToString()
+        )
     }
 
     override fun authorize(actor: Any, action: String, resource: Any) {

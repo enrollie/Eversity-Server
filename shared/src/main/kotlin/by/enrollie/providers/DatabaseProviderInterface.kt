@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/25/22, 2:45 PM
+ * Last updated: 7/27/22, 10:55 PM
  */
 @file:Suppress("UNUSED")
 
@@ -70,47 +70,47 @@ interface DatabaseRolesProviderInterface {
      * Returns list of all user roles
      * @throws UserDoesNotExistException if user does not exist
      */
-    fun getRolesForUser(userID: UserID): List<RoleData<*>>
+    fun getRolesForUser(userID: UserID): List<RoleData>
 
     /**
      * Adds role to user.
      * @throws UserDoesNotExistException if user does not exist
      */
-    fun appendRoleToUser(userID: UserID, role: RoleData<*>)
+    fun appendRoleToUser(userID: UserID, role: RoleData)
 
     /**
      * Appends generated roles to users.
      * @throws UserDoesNotExistException if any user does not exist
      */
-    fun batchAppendRolesToUsers(users: List<UserID>, roleGenerator: (UserID) -> RoleData<*>)
+    fun batchAppendRolesToUsers(users: List<UserID>, roleGenerator: (UserID) -> RoleData)
 
     /**
      * Returns list of all roles with [type].
      */
-    fun getAllRolesByType(type: Roles.Role): List<RoleData<*>>
+    fun getAllRolesByType(type: Roles.Role): List<RoleData>
 
     /**
      * Returns list of all matching roles in database.
      */
-    fun getAllRolesByMatch(match: (RoleData<*>) -> Boolean): List<RoleData<*>>
+    fun getAllRolesByMatch(match: (RoleData) -> Boolean): List<RoleData>
 
     /**
      * Returns list of all roles where all entries matching.
      */
-    fun getAllRolesWithMatchingEntries(vararg entries: Pair<Roles.Role.Field<*>, Any?>): List<RoleData<*>>
+    fun getAllRolesWithMatchingEntries(vararg entries: Pair<Roles.Role.Field<*>, Any?>): List<RoleData>
 
     /**
      * Updates role's entry.
      * @throws ProtectedFieldEditException if [field] is protected and cannot be updated
      * @throws IllegalArgumentException if [field] is not valid for this class
      */
-    fun <T : Any> updateRole(role: RoleData<*>, field: Roles.Role.Field<T>, value: T)
+    fun <T : Any> updateRole(role: RoleData, field: Roles.Role.Field<T>, value: T)
 
     /**
      * Revokes role (sets roleRevokedDateTime to [revokeDateTime] or, if null, to current time) from user.
      * @throws UserDoesNotExistException if user does not exist
      */
-    fun revokeRoleFromUser(userID: UserID, role: RoleData<*>, revokeDateTime: LocalDateTime?)
+    fun revokeRoleFromUser(userID: UserID, role: RoleData, revokeDateTime: LocalDateTime?)
 }
 
 interface DatabaseClassesProviderInterface {
@@ -278,7 +278,7 @@ interface DatabaseAbsenceProviderInterface {
      * @throws ProtectedFieldEditException if [field] is protected and cannot be updated
      */
     fun <T : Any> updateAbsence(
-        userID: UserID, studentData: RoleData<Roles.CLASS.Student>, classID: ClassID, field: Field<T>, value: T
+        userID: UserID, studentData: RoleData, classID: ClassID, field: Field<T>, value: T
     )
 
     /**

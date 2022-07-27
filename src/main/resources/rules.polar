@@ -6,7 +6,7 @@
 #  Last updated: 6/26/22, 11:35 PM
 #
 actor User {
-    permissions = ["read_lessons"];
+    permissions = ["read_lessons", "read_roles"];
 }
 
 # Notes on working with Oso Polar definitions:
@@ -75,7 +75,11 @@ has_relation(class: Class, "class", lesson: Lesson) if
 
 allow(user: User, "read_lessons", target: User) if
     (user.getId() = target.getId()) or
-    (role in RolesProvider.roles(user) and role.getRoleID().startsWith("SCHOOL")); # Users with any school-wide role `can read any user's lessons
+    (role in RolesProvider.roles(user) and role.getRole().getID().startsWith("SCHOOL")); # Users with any school-wide role `can read any user's lessons
+
+allow(user: User, "read_roles", target: User) if
+    (user.getId() = target.getId()) or
+    (role in RolesProvider.roles(user) and role.getRole().getID().startsWith("SCHOOL")); # Users with any school-wide role `can read any user's roles
 
 allow(user: User, action: String, class: Class) if
     has_permission(user, action, class);

@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/18/22, 2:14 AM
+ * Last updated: 7/25/22, 11:31 PM
  */
 
 package by.enrollie.impl
@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap
 class DataRegistrarImpl : DataRegistrarProviderInterface {
     private val uuidsMap = ConcurrentHashMap<String, Pair<UserID, Credentials>>(100)
     private val processingUsers = ConcurrentSet<UserID>()
-    private val broadcaster = MutableSharedFlow<DataRegistrarProviderInterface.Message>(5, 500)
+    private val broadcaster = MutableSharedFlow<DataRegistrarProviderInterface.Message>(15, 500)
     private val scope = CoroutineScope(Dispatchers.IO)
     private val jobsBroadcaster = MutableSharedFlow<Triple<UserID, Credentials, String>>(0, 5)
 
@@ -40,11 +40,16 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
     override fun authenticateObserver(uuid: String): Boolean = uuidsMap.containsKey(uuid)
 
     override fun addToRegister(userID: UserID, schoolsByCredentials: Credentials): String {
-        require(!processingUsers.contains(userID)) { "User is already being processed" }
+        if (processingUsers.contains(userID)) {
+            return uuidsMap.entries.first { it.value.first == userID }.key
+        }
         require(ProvidersCatalog.databaseProvider.usersProvider.getUser(userID) == null) { "User is already registered" }
         processingUsers.add(userID)
         val uuid = UUID.randomUUID().toString()
         uuidsMap[uuid] = Pair(userID, schoolsByCredentials)
+        scope.launch {
+            jobsBroadcaster.emit(Triple(userID, schoolsByCredentials, uuid))
+        }
         return uuid
     }
 
@@ -67,7 +72,6 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
     }
 
     private suspend fun registerUser(userID: UserID, credentials: Credentials, uuid: String) {
-        uuidsMap.remove(uuid)
         Sentry.addBreadcrumb(Breadcrumb.debug("Beginning registration with ID $uuid"))
         val user = SchoolsByParser.USER.getBasicUserInfo(userID, credentials).fold({
             broadcaster.emit(
