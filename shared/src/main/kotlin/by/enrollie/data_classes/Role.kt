@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/18/22, 2:14 AM
+ * Last updated: 7/27/22, 11:40 PM
  */
 @file:Suppress("UNUSED")
 
@@ -12,7 +12,12 @@ package by.enrollie.data_classes
 import by.enrollie.annotations.UnsafeAPI
 import by.enrollie.serializers.LocalDateTimeSerializer
 import by.enrollie.serializers.RoleInformationSerializer
+import by.enrollie.serializers.RoleSerializer
 import java.time.LocalDateTime
+import kotlin.reflect.KType
+import kotlin.reflect.KTypeProjection
+import kotlin.reflect.full.createType
+import kotlin.reflect.full.starProjectedType
 
 /**
  * Members of scopes define possible role IDs in the scope.
@@ -23,15 +28,14 @@ sealed class Roles private constructor() {
         fun roleByID(id: String): Role?
     }
 
+    @kotlinx.serialization.Serializable(with = RoleSerializer::class)
     sealed interface Role {
-        class Field<T> private constructor(val id: String, val isRequired: Boolean) {
+        class Field<T> private constructor(val id: String, val isRequired: Boolean, val type: KType) {
             override fun toString(): String = id
 
-            val type: T? = null
-
             companion object {
-                internal operator fun <T> invoke(role: Role, id: String, isRequired: Boolean): Field<T> =
-                    Field("$role.$id", isRequired)
+                internal operator fun <T> invoke(role: Role, id: String, isRequired: Boolean, type: KType): Field<T> =
+                    Field("$role.$id", isRequired, type)
             }
         }
 
@@ -45,8 +49,8 @@ sealed class Roles private constructor() {
 
     object CLASS : RoleCategory {
         class AbsenceProvider internal constructor() : Role {
-            val classID = Role.Field<ClassID>(this, "classID", true)
-            val delegatedBy = Role.Field<UserID>(this, "delegatedBy", true)
+            val classID = Role.Field<ClassID>(this, "classID", true, ClassID::class.starProjectedType)
+            val delegatedBy = Role.Field<UserID>(this, "delegatedBy", true, UserID::class.starProjectedType)
 
             override val properties: List<Role.Field<*>> = listOf(classID, delegatedBy)
 
@@ -56,8 +60,13 @@ sealed class Roles private constructor() {
         val ABSENCE_PROVIDER = AbsenceProvider()
 
         class Student internal constructor() : Role {
-            val classID: Role.Field<ClassID> = Role.Field(this, "classID", true)
-            val subgroups: Role.Field<List<SubgroupID>> = Role.Field(this, "subgroups", false)
+            val classID: Role.Field<ClassID> = Role.Field(this, "classID", true, ClassID::class.starProjectedType)
+            val subgroups: Role.Field<List<SubgroupID>> = Role.Field(
+                this, "subgroups", false, List::class.createType(
+                    listOf(KTypeProjection.invariant(SubgroupID::class.starProjectedType))
+                )
+            )
+
             override fun toString(): String = "CLASS.Student"
 
             // List of all properties of the class.
@@ -67,7 +76,7 @@ sealed class Roles private constructor() {
         val STUDENT = Student()
 
         class ClassTeacher internal constructor() : Role {
-            val classID: Role.Field<ClassID> = Role.Field(this, "classID", true)
+            val classID: Role.Field<ClassID> = Role.Field(this, "classID", true, ClassID::class.starProjectedType)
             override fun toString(): String = "CLASS.ClassTeacher"
             override val properties: List<Role.Field<*>> = listOf(classID)
         }
@@ -151,8 +160,9 @@ sealed class Roles private constructor() {
     }
 }
 
+@kotlinx.serialization.Serializable(with = RoleInformationSerializer::class)
 class RoleInformationHolder(vararg information: Pair<Roles.Role.Field<*>, Any?>) {
-    private val information: Map<String, Any?> = information.map { it.first.id to it.second }.toMap()
+    private val information: Map<String, Any?> = information.associate { it.first.id to it.second }
 
     @UnsafeAPI
     fun getAsMap(): Map<Roles.Role.Field<*>, Any?> =
@@ -166,14 +176,13 @@ class RoleInformationHolder(vararg information: Pair<Roles.Role.Field<*>, Any?>)
 }
 
 @kotlinx.serialization.Serializable
-class RoleData<T : Roles.Role>(
+class RoleData(
     val userID: UserID,
-    val role: T,
+    val role: Roles.Role,
     @kotlinx.serialization.Serializable(with = RoleInformationSerializer::class) private val additionalInformation: RoleInformationHolder,
     @kotlinx.serialization.Serializable(with = LocalDateTimeSerializer::class) val roleGrantedDateTime: LocalDateTime,
     @kotlinx.serialization.Serializable(with = LocalDateTimeSerializer::class) val roleRevokedDateTime: LocalDateTime?
 ) {
-    val roleID: String = role.toString()
 
     @UnsafeAPI
     fun getRoleInformationHolder() = additionalInformation
@@ -192,7 +201,8 @@ class RoleData<T : Roles.Role>(
         return unsafeGetField(field) as A?
     }
 
-    val uniqueID: String = "$userID.$roleID.${hashCode()}"
+    val uniqueID: String
+        get() = "$userID.${role.getID()}.${hashCode()}"
 
     override fun toString(): String {
         return "RoleData(userID=$userID, scope=$role, additionalInformation=$additionalInformation, roleGrantedDateTime=$roleGrantedDateTime, roleRevokedDateTime=$roleRevokedDateTime)"
@@ -206,14 +216,13 @@ class RoleData<T : Roles.Role>(
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as RoleData<*>
+        other as RoleData
 
         if (userID != other.userID) return false
         if (role != other.role) return false
         if (additionalInformation != other.additionalInformation) return false
         if (roleGrantedDateTime != other.roleGrantedDateTime) return false
         if (roleRevokedDateTime != other.roleRevokedDateTime) return false
-        if (roleID != other.roleID) return false
 
         return true
     }

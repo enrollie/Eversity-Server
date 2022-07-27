@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 2:01 AM
+ * Last updated: 7/26/22, 12:44 AM
  */
 
 package by.enrollie.plugins
@@ -35,7 +35,7 @@ data class UserPrincipal(
 
 internal fun Application.configureSecurity() {
     authentication {
-        jwt {
+        jwt("jwt") {
             val jwtAudience = ProvidersCatalog.configuration.jwtConfiguration.audience
             val secret = ProvidersCatalog.configuration.jwtConfiguration.secret
             jwtProvider = object : JwtProvider {

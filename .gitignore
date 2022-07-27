@@ -157,3 +157,5 @@ gradle-app.setting
 /logs/
 
 /plugins
+/.idea/kotlinc.xml
+/.idea/codeStyles/Project.xml

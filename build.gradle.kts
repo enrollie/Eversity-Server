@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/17/22, 9:35 PM
+ * Last updated: 7/26/22, 12:04 AM
  */
 
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -22,7 +22,7 @@ plugins {
 }
 
 group = "by.enrollie"
-version = semver.info
+//version = semver.info
 application {
     mainClass.set("by.enrollie.ApplicationKt")
     val isDevelopment: Boolean = project.ext.has("development")
@@ -56,6 +56,7 @@ dependencies {
     implementation("joda-time:joda-time:2.10.14")
     implementation("com.osohq:oso:0.26.1")
     implementation("com.newrelic.telemetry:micrometer-registry-new-relic:0.9.0")
+    implementation("io.micrometer:micrometer-registry-jmx:1.9.0")
     implementation("io.sentry:sentry:6.1.4")
     implementation("io.sentry:sentry-kotlin-extensions:6.1.4")
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
@@ -101,6 +102,7 @@ semver {
     dirtyMarker = "dirty"
     initialVersion = "0.1.0"
     tagType = io.wusa.TagType.LIGHTWEIGHT
+    project.version = semver.info
     branches { // list of branch configurations
         branch {
             regex = ".+"
