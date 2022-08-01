@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/27/22, 11:40 PM
+ * Last updated: 8/1/22, 9:24 PM
  */
 @file:Suppress("UNUSED")
 
@@ -177,6 +177,7 @@ class RoleInformationHolder(vararg information: Pair<Roles.Role.Field<*>, Any?>)
 
 @kotlinx.serialization.Serializable
 class RoleData(
+    val uniqueID: String,
     val userID: UserID,
     val role: Roles.Role,
     @kotlinx.serialization.Serializable(with = RoleInformationSerializer::class) private val additionalInformation: RoleInformationHolder,
@@ -201,11 +202,8 @@ class RoleData(
         return unsafeGetField(field) as A?
     }
 
-    val uniqueID: String
-        get() = "$userID.${role.getID()}.${hashCode()}"
-
     override fun toString(): String {
-        return "RoleData(userID=$userID, scope=$role, additionalInformation=$additionalInformation, roleGrantedDateTime=$roleGrantedDateTime, roleRevokedDateTime=$roleRevokedDateTime)"
+        return "RoleData(uniqueID=$uniqueID ,userID=$userID, scope=$role, additionalInformation=$additionalInformation, roleGrantedDateTime=$roleGrantedDateTime, roleRevokedDateTime=$roleRevokedDateTime)"
     }
 
     override fun hashCode(): Int =
@@ -218,6 +216,7 @@ class RoleData(
 
         other as RoleData
 
+        if (uniqueID != other.uniqueID) return false
         if (userID != other.userID) return false
         if (role != other.role) return false
         if (additionalInformation != other.additionalInformation) return false

@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 3:38 AM
+ * Last updated: 8/1/22, 9:24 PM
  */
 
 package by.enrollie.plugins
@@ -11,7 +11,6 @@ package by.enrollie.plugins
 import by.enrollie.APPLICATION_METADATA
 import by.enrollie.data_classes.User
 import by.enrollie.impl.ProvidersCatalog
-import by.enrollie.privateProviders.AbsenceManagerInterface
 import by.enrollie.privateProviders.ApplicationMetadata
 import by.enrollie.privateProviders.ApplicationProvider
 import by.enrollie.privateProviders.TokenSignerProvider
@@ -26,7 +25,6 @@ internal fun Application.configureStartStopListener(plugins: List<PluginMetadata
             override val metadata: ApplicationMetadata = APPLICATION_METADATA
             override val configuration: ConfigurationInterface = ProvidersCatalog.configuration
             override val database: DatabaseProviderInterface = ProvidersCatalog.databaseProvider
-            override val absenceManager: AbsenceManagerInterface = ProvidersCatalog.absenceManager
             override val tokenSigner: TokenSignerProvider = object : TokenSignerProvider {
                 override fun signToken(user: User, token: String): String = jwtProvider.signToken(user, token)
             }

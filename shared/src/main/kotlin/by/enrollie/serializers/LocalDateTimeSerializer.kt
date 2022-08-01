@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/27/22, 11:07 PM
+ * Last updated: 8/1/22, 9:24 PM
  */
 
 package by.enrollie.serializers
@@ -20,13 +20,14 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 class LocalDateTimeSerializer : KSerializer<LocalDateTime> {
+    private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd\'T\'HH:mm:ssXXX")
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LocalDateTime", PrimitiveKind.STRING)
 
     override fun deserialize(decoder: Decoder): LocalDateTime {
-        return ZonedDateTime.parse(decoder.decodeString(), DateTimeFormatter.ISO_OFFSET_DATE_TIME).toLocalDateTime()
+        return ZonedDateTime.parse(decoder.decodeString(), formatter).toLocalDateTime()
     }
 
     override fun serialize(encoder: Encoder, value: LocalDateTime) {
-        encoder.encodeString(value.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        encoder.encodeString(value.atZone(ZoneId.systemDefault()).format(formatter))
     }
 }

@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/25/22, 11:31 PM
+ * Last updated: 8/1/22, 9:24 PM
  */
 
 package by.enrollie.impl
@@ -12,6 +12,7 @@ import by.enrollie.data_classes.*
 import by.enrollie.extensions.fromParserName
 import by.enrollie.plugins.jwtProvider
 import by.enrollie.providers.DataRegistrarProviderInterface
+import by.enrollie.providers.DatabaseRolesProviderInterface
 import com.neitex.Credentials
 import com.neitex.SchoolsByParser
 import com.neitex.SchoolsByUserType
@@ -214,10 +215,10 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
                                 it.title,
                                 it.date,
                                 it.place,
-                                setOf(),
+                                it.teacher,
                                 schoolClass.id,
                                 it.journalID!!,
-                                null // TODO: Add teachers and subgroups
+                                it.subgroup
                             )
                         }
                     }, {
@@ -270,23 +271,21 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
                         )
                     } + User(userID, Name.fromParserName(user.name)))
                     ProvidersCatalog.databaseProvider.rolesProvider.batchAppendRolesToUsers(pupils.map { it.id }) { pupil ->
-                        RoleData(pupil,
-                            Roles.CLASS.STUDENT,
-                            RoleInformationHolder(Roles.CLASS.STUDENT.classID to schoolClass.id,
+                        DatabaseRolesProviderInterface.RoleCreationData(
+                            pupil, Roles.CLASS.STUDENT, RoleInformationHolder(
+                                Roles.CLASS.STUDENT.classID to schoolClass.id,
                                 Roles.CLASS.STUDENT.subgroups to subgroups.filter { it.pupils.contains(pupil) }
                                     .map { it.subgroupID }.toList()
-                            ),
-                            transfers[pupil]?.second?.atStartOfDay() ?: LocalDateTime.now(),
-                            null
+                            ), transfers[pupil]?.second?.atStartOfDay() ?: LocalDateTime.now()
                         )
                     }
-                    ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
-                        userID, RoleData(
+                    if (ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesWithMatchingEntries(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id)
+                            .firstOrNull { it.userID == userID && it.roleRevokedDateTime == null } == null
+                    ) ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
+                        userID, DatabaseRolesProviderInterface.RoleCreationData(
                             userID,
                             Roles.CLASS.CLASS_TEACHER,
-                            RoleInformationHolder(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id),
-                            LocalDateTime.now(),
-                            null
+                            RoleInformationHolder(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id)
                         )
                     )
                     ProvidersCatalog.databaseProvider.lessonsProvider.apply {
@@ -312,12 +311,10 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
                         )
                     )
                     ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
-                        userID, RoleData(
+                        userID, DatabaseRolesProviderInterface.RoleCreationData(
                             userID,
                             Roles.CLASS.CLASS_TEACHER,
-                            RoleInformationHolder(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id),
-                            LocalDateTime.now(),
-                            null
+                            RoleInformationHolder(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id)
                         )
                     )
                 } else ProvidersCatalog.databaseProvider.usersProvider.createUser(
@@ -338,13 +335,8 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
                 if (user.type == SchoolsByUserType.ADMINISTRATION) {
                     Sentry.addBreadcrumb(Breadcrumb.info("User is a part of school administration"))
                     ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
-                        userID,
-                        RoleData(
-                            userID,
-                            Roles.SCHOOL.ADMINISTRATION,
-                            RoleInformationHolder(),
-                            LocalDateTime.now(),
-                            null
+                        userID, DatabaseRolesProviderInterface.RoleCreationData(
+                            userID, Roles.SCHOOL.ADMINISTRATION, RoleInformationHolder()
                         )
                     )
                 }

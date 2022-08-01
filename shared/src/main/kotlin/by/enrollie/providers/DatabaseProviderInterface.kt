@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/28/22, 12:19 AM
+ * Last updated: 8/1/22, 9:24 PM
  */
 @file:Suppress("UNUSED")
 
@@ -11,6 +11,9 @@ package by.enrollie.providers
 
 import by.enrollie.data_classes.*
 import by.enrollie.exceptions.*
+import by.enrollie.serializers.LocalDateSerializer
+import by.enrollie.serializers.LocalDateTimeSerializer
+import kotlinx.coroutines.flow.SharedFlow
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -27,9 +30,42 @@ interface DatabaseProviderInterface {
     val authenticationDataProvider: DatabaseAuthenticationDataProviderInterface
     val lessonsProvider: DatabaseLessonsProviderInterface
     val absenceProvider: DatabaseAbsenceProviderInterface
+    val customCredentialsProvider: DatabaseCustomCredentialsProviderInterface
+}
+
+interface Event<T> {
+    val eventType: EventType
+
+    /**
+     * When [eventType] is [EventType.CREATED], this is the new object.
+     *
+     * When [eventType] is [EventType.UPDATED], this is object's new data.
+     *
+     * When [eventType] is [EventType.DELETED], this is the deleted object.
+     */
+    val eventSubject: T
+
+    /**
+     * When [eventType] is [EventType.UPDATED], this is object's old data snapshot.
+     */
+    val subjectPrevState: T?
+
+    enum class EventType {
+        CREATED,
+        UPDATED,
+        DELETED
+    }
 }
 
 interface DatabaseUserProviderInterface {
+    val eventsFlow: SharedFlow<UserEvent>
+
+    data class UserEvent internal constructor(
+        override val eventType: Event.EventType,
+        override val eventSubject: User,
+        override val subjectPrevState: User?
+    ) : Event<User>
+
     /**
      * Returns user by id (or null if user does not exist)
      */
@@ -67,6 +103,25 @@ interface DatabaseUserProviderInterface {
 }
 
 interface DatabaseRolesProviderInterface {
+    val eventsFlow: SharedFlow<RoleEvent>
+
+    data class RoleEvent internal constructor(
+        override val eventType: Event.EventType,
+        override val eventSubject: RoleData,
+        override val subjectPrevState: RoleData?
+    ) : Event<RoleData>
+
+    @kotlinx.serialization.Serializable
+    data class RoleCreationData(
+        val userID: UserID,
+        val role: Roles.Role,
+        val informationHolder: RoleInformationHolder,
+        @kotlinx.serialization.Serializable(with = LocalDateTimeSerializer::class)
+        val creationDate: LocalDateTime = LocalDateTime.now(),
+        @kotlinx.serialization.Serializable(with = LocalDateTimeSerializer::class)
+        val expirationDate: LocalDateTime? = null
+    )
+
     /**
      * Returns list of all user roles
      * @throws UserDoesNotExistException if user does not exist
@@ -77,13 +132,13 @@ interface DatabaseRolesProviderInterface {
      * Adds role to user.
      * @throws UserDoesNotExistException if user does not exist
      */
-    fun appendRoleToUser(userID: UserID, role: RoleData)
+    fun appendRoleToUser(userID: UserID, role: RoleCreationData): RoleData
 
     /**
      * Appends generated roles to users.
      * @throws UserDoesNotExistException if any user does not exist
      */
-    fun batchAppendRolesToUsers(users: List<UserID>, roleGenerator: (UserID) -> RoleData)
+    fun batchAppendRolesToUsers(users: List<UserID>, roleGenerator: (UserID) -> RoleCreationData)
 
     /**
      * Returns list of all roles with [type].
@@ -104,14 +159,16 @@ interface DatabaseRolesProviderInterface {
      * Updates role's entry.
      * @throws ProtectedFieldEditException if [field] is protected and cannot be updated
      * @throws IllegalArgumentException if [field] is not valid for this class
+     * @throws NoSuchElementException if role does not exist
      */
-    fun <T : Any> updateRole(role: RoleData, field: Roles.Role.Field<T>, value: T)
+    fun <T : Any> updateRole(roleID: String, field: Roles.Role.Field<T>, value: T)
 
     /**
      * Revokes role (sets roleRevokedDateTime to [revokeDateTime] or, if null, to current time) from user.
      * @throws UserDoesNotExistException if user does not exist
+     * @throws NoSuchElementException if role does not exist
      */
-    fun revokeRoleFromUser(userID: UserID, role: RoleData, revokeDateTime: LocalDateTime?)
+    fun revokeRoleFromUser(userID: UserID, roleID: String, revokeDateTime: LocalDateTime?)
 }
 
 interface DatabaseClassesProviderInterface {
@@ -161,6 +218,14 @@ interface DatabaseClassesProviderInterface {
 }
 
 interface DatabaseLessonsProviderInterface {
+    val eventsFlow: SharedFlow<LessonEvent>
+
+    data class LessonEvent internal constructor(
+        override val eventType: Event.EventType,
+        override val eventSubject: Lesson,
+        override val subjectPrevState: Lesson?
+    ) : Event<Lesson>
+
     /**
      * Returns lesson by id (or null if lesson does not exist)
      */
@@ -250,6 +315,42 @@ interface DatabaseTimetablePlacingProviderInterface {
 
 interface DatabaseAbsenceProviderInterface {
     /**
+     * Flow of absence change events.
+     *
+     * Anything that wants to be notified of any absence change should subscribe to this flow.
+     */
+    val eventsFlow: SharedFlow<AbsenceEvent>
+
+    data class AbsenceEvent internal constructor(
+        override val eventType: Event.EventType,
+        /**
+         * When [eventType] is [Event.EventType.CREATED], this is the absence that was created.
+         *
+         * When [eventType] is [Event.EventType.UPDATED], this is the new absence record data.
+         */
+        override val eventSubject: AbsenceRecord,
+        /**
+         * If [eventType] is [Event.EventType.UPDATED], this is the previous absence record snapshot.
+         */
+        override val subjectPrevState: AbsenceRecord?
+    ) : Event<AbsenceRecord>
+
+    /**
+     * Template for new absence record creation.
+     */
+    @kotlinx.serialization.Serializable
+    data class NewAbsenceRecord(
+        val creatorID: UserID,
+        val classID: ClassID,
+        val studentRoleID: String,
+        val absenceType: AbsenceType,
+        @kotlinx.serialization.Serializable(with = LocalDateSerializer::class)
+        val absenceDate: LocalDate,
+    )
+
+    fun getAbsence(absenceID: AbsenceID): AbsenceRecord?
+
+    /**
      * Returns a list of all absence records for given [userID] in given [datesRange]
      * @throws UserDoesNotExistException if user does not exist
      */
@@ -264,6 +365,7 @@ interface DatabaseAbsenceProviderInterface {
     /**
      * Returns a list of all absence records for given [classID] for given [date]
      * @throws SchoolClassDoesNotExistException if class does not exist
+     * @throws IllegalArgumentException if [date] is before [classID] was created
      */
     fun getAbsencesForClass(classID: ClassID, date: LocalDate): List<AbsenceRecord>
 
@@ -273,34 +375,61 @@ interface DatabaseAbsenceProviderInterface {
     fun getClassesWithoutAbsenceInfo(date: LocalDate): List<ClassID>
 
     /**
+     * Returns list of classes without absence records in given [datesRange]
+     */
+    fun getClassesWithoutAbsenceInfo(datesRange: Pair<LocalDate, LocalDate>): List<ClassID>
+
+    /**
+     * Returns list of dates on which there are no absence records for given [classID]
+     */
+    fun getDatesWithoutAbsenceInfo(classID: ClassID, datesRange: Pair<LocalDate, LocalDate>): List<LocalDate>
+
+    /**
      * Updates an absence record.
      * @throws UserDoesNotExistException if user does not exist
      * @throws NoSuchElementException if absence record does not exist
      * @throws ProtectedFieldEditException if [field] is protected and cannot be updated
      */
     fun <T : Any> updateAbsence(
-        userID: UserID, studentData: RoleData, classID: ClassID, field: Field<T>, value: T
+        absenceID: AbsenceID, field: Field<T>, value: T
     )
 
     /**
-     * Creates an [absence]. If similar absence already exists, it is updated.
+     * Creates a new absence record.
      * @throws UserDoesNotExistException if user does not exist
+     * @throws AbsenceRecordsConflictException if absence record with same classID, studentRoleID and absenceDate already exists
      */
-    fun createAbsence(userID: UserID, absence: AbsenceRecord)
+    fun createAbsence(record: NewAbsenceRecord): AbsenceRecord
 
     /**
-     * Creates all given [absences] in an optimized way. If similar single absence record already exists, it is updated.
+     * Creates all given [absences] in an optimized way. If any of records already exists, [AbsenceRecordsConflictException] is thrown.
      * @throws UserDoesNotExistException if user does not exist
+     * @throws AbsenceRecordsConflictException if absence record with same classID, studentRoleID and absenceDate already exists
      */
-    fun createAbsences(userID: UserID, absences: List<AbsenceRecord>)
+    fun createAbsences(absences: List<NewAbsenceRecord>): List<AbsenceRecord>
 
     /**
-     * Deletes [absence] by finding similar one and deleting it.
+     * Marks [classID] as having no absence records for given [date], so that server will not assume that there is no data for that class at that date.
+     *
+     * Note: calling this method implies that there is no absence record for given [classID] and [date] and it will change those records lessonsList to empty list.
+     * @throws SchoolClassDoesNotExistException if class does not exist
+     * @see getClassesWithoutAbsenceInfo
      */
-    fun deleteAbsence(absence: AbsenceRecord)
+    fun markClassAsDataRich(sentByID: UserID, classID: ClassID, date: LocalDate)
 }
 
 interface DatabaseAuthenticationDataProviderInterface {
+    val eventsFlow: SharedFlow<AuthenticationDataEvent>
+
+    data class AuthenticationDataEvent internal constructor(
+        override val eventType: Event.EventType,
+        override val eventSubject: AuthenticationToken,
+        /**
+         * Always null since [AuthenticationToken] does not have editable fields.
+         */
+        override val subjectPrevState: AuthenticationToken?
+    ) : Event<AuthenticationToken>
+
     /**
      * Returns all user tokens
      * @throws UserDoesNotExistException if user does not exist
@@ -327,4 +456,24 @@ interface DatabaseAuthenticationDataProviderInterface {
      * Checks if token is valid, is associated with a user and is not expired and returns true if so.
      */
     fun checkToken(token: String, userID: UserID): Boolean
+}
+
+interface DatabaseCustomCredentialsProviderInterface {
+    /**
+     * Returns custom credentials for given [userID]
+     * @throws UserDoesNotExistException if user does not exist
+     */
+    fun getCredentials(userID: UserID, credentialsType: String): String?
+
+    /**
+     * Sets custom credentials for given [userID]
+     * @throws UserDoesNotExistException if user does not exist
+     */
+    fun setCredentials(userID: UserID, credentialsType: String, credentials: String)
+
+    /**
+     * Removes custom credentials for given [userID]
+     * @throws UserDoesNotExistException if user does not exist
+     */
+    fun clearCredentials(userID: UserID, credentialsType: String)
 }

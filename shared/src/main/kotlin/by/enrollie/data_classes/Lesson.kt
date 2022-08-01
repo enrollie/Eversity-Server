@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/18/22, 3:03 AM
+ * Last updated: 8/1/22, 9:24 PM
  */
 
 package by.enrollie.data_classes
@@ -21,7 +21,7 @@ data class Lesson(
     @kotlinx.serialization.Serializable(with = LocalDateSerializer::class)
     val date: LocalDate,
     val placeInTimetable: TimetablePlace,
-    val teachers: Set<UserID>, // Teachers may not be registered at the moment of lesson creation, so we can't use RoleData here
+    val teachers: UserID,
     val classID: ClassID,
     val journalID: JournalID,
     val subgroupID: SubgroupID?

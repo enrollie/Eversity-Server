@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/15/22, 3:38 AM
+ * Last updated: 8/1/22, 9:24 PM
  */
 
 package by.enrollie.privateProviders
@@ -15,6 +15,5 @@ interface ApplicationProvider {
     val metadata: ApplicationMetadata
     val configuration: ConfigurationInterface
     val database: DatabaseProviderInterface
-    val absenceManager: AbsenceManagerInterface
     val tokenSigner: TokenSignerProvider
 }
