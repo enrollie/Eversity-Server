@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/1/22, 9:24 PM
+ * Last updated: 8/3/22, 10:03 PM
  */
 
 package by.enrollie.data_classes
@@ -26,10 +26,10 @@ data class AbsenceRecord(
     val classID: ClassID,
     val absenceType: AbsenceType,
     val lessonsList: List<TimetablePlace>,
-    val createdBy: RoleData,
+    val createdBy: UserID,
     @Serializable(with = LocalDateTimeSerializer::class)
     val created: LocalDateTime,
-    val lastUpdatedBy: RoleData?,
+    val lastUpdatedBy: UserID?,
     @Serializable(with = LocalDateTimeSerializer::class)
     val lastUpdated: LocalDateTime?
 )
