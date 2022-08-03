@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/1/22, 9:24 PM
+ * Last updated: 8/3/22, 11:57 PM
  */
 @file:Suppress("UNUSED")
 
@@ -346,6 +346,7 @@ interface DatabaseAbsenceProviderInterface {
         val absenceType: AbsenceType,
         @kotlinx.serialization.Serializable(with = LocalDateSerializer::class)
         val absenceDate: LocalDate,
+        val skippedLessons: List<TimetablePlace>
     )
 
     fun getAbsence(absenceID: AbsenceID): AbsenceRecord?
