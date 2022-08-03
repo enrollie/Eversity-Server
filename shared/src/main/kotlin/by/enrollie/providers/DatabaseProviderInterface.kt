@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/3/22, 11:57 PM
+ * Last updated: 8/4/22, 12:08 AM
  */
 @file:Suppress("UNUSED")
 
@@ -60,7 +60,7 @@ interface Event<T> {
 interface DatabaseUserProviderInterface {
     val eventsFlow: SharedFlow<UserEvent>
 
-    data class UserEvent internal constructor(
+    data class UserEvent(
         override val eventType: Event.EventType,
         override val eventSubject: User,
         override val subjectPrevState: User?
@@ -105,7 +105,7 @@ interface DatabaseUserProviderInterface {
 interface DatabaseRolesProviderInterface {
     val eventsFlow: SharedFlow<RoleEvent>
 
-    data class RoleEvent internal constructor(
+    data class RoleEvent(
         override val eventType: Event.EventType,
         override val eventSubject: RoleData,
         override val subjectPrevState: RoleData?
@@ -220,7 +220,7 @@ interface DatabaseClassesProviderInterface {
 interface DatabaseLessonsProviderInterface {
     val eventsFlow: SharedFlow<LessonEvent>
 
-    data class LessonEvent internal constructor(
+    data class LessonEvent(
         override val eventType: Event.EventType,
         override val eventSubject: Lesson,
         override val subjectPrevState: Lesson?
@@ -321,7 +321,7 @@ interface DatabaseAbsenceProviderInterface {
      */
     val eventsFlow: SharedFlow<AbsenceEvent>
 
-    data class AbsenceEvent internal constructor(
+    data class AbsenceEvent(
         override val eventType: Event.EventType,
         /**
          * When [eventType] is [Event.EventType.CREATED], this is the absence that was created.
@@ -422,7 +422,7 @@ interface DatabaseAbsenceProviderInterface {
 interface DatabaseAuthenticationDataProviderInterface {
     val eventsFlow: SharedFlow<AuthenticationDataEvent>
 
-    data class AuthenticationDataEvent internal constructor(
+    data class AuthenticationDataEvent(
         override val eventType: Event.EventType,
         override val eventSubject: AuthenticationToken,
         /**
