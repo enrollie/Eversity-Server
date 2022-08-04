@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/4/22, 5:29 PM
+ * Last updated: 8/5/22, 2:57 AM
  */
 @file:Suppress("UNUSED")
 
@@ -161,14 +161,14 @@ interface DatabaseRolesProviderInterface {
      * @throws IllegalArgumentException if [field] is not valid for this class
      * @throws NoSuchElementException if role does not exist
      */
-    fun <T : Any> updateRole(roleID: String, field: Roles.Role.Field<T>, value: T)
+    fun <T : Any> updateRole(roleID: String, field: Field<T>, value: T)
 
     /**
      * Revokes role (sets roleRevokedDateTime to [revokeDateTime] or, if null, to current time) from user.
      * @throws UserDoesNotExistException if user does not exist
      * @throws NoSuchElementException if role does not exist
      */
-    fun revokeRoleFromUser(userID: UserID, roleID: String, revokeDateTime: LocalDateTime?)
+    fun revokeRole(roleID: String, revokeDateTime: LocalDateTime?)
 }
 
 interface DatabaseClassesProviderInterface {
