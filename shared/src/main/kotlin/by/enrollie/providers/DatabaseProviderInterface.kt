@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/4/22, 12:08 AM
+ * Last updated: 8/4/22, 5:29 PM
  */
 @file:Suppress("UNUSED")
 
@@ -392,7 +392,7 @@ interface DatabaseAbsenceProviderInterface {
      * @throws ProtectedFieldEditException if [field] is protected and cannot be updated
      */
     fun <T : Any> updateAbsence(
-        absenceID: AbsenceID, field: Field<T>, value: T
+        updatedBy: UserID, absenceID: AbsenceID, field: Field<T>, value: T
     )
 
     /**
