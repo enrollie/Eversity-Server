@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/10/22, 11:16 PM
+ * Last updated: 8/7/22, 3:49 AM
  */
 
 package by.enrollie.annotations
@@ -11,7 +11,7 @@ package by.enrollie.annotations
 @Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION, AnnotationTarget.FIELD)
 @RequiresOptIn(
     level = RequiresOptIn.Level.WARNING,
-    message = "This API is not type safe, use it only if you know what you are doing"
+    message = "This API is not safe, refer to its documentation for more information."
 )
 @Retention(AnnotationRetention.BINARY)
 annotation class UnsafeAPI

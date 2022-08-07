@@ -6,7 +6,7 @@
 #  Last updated: 6/26/22, 11:35 PM
 #
 actor User {
-    permissions = ["read_lessons", "read_roles"];
+    permissions = ["read_lessons", "read_roles", "read"];
 }
 
 # Notes on working with Oso Polar definitions:
@@ -22,8 +22,8 @@ resource School{
     "edit_absence" if "read_statistics"; # May be changed in the future
 }
 
-resource Class{
-    permissions = ["read_absence", "edit_absence", "read_students", "request_sync", "read_lessons"];
+resource SchoolClass{
+    permissions = ["read_absence", "edit_absence", "read_students", "request_sync", "read_lessons", "read"];
     roles = ["CLASS.Student", "CLASS.ClassTeacher", "CLASS.AbsenceProvider"];
     relations = {school: School};
 
@@ -44,33 +44,33 @@ resource Class{
 resource Lesson{
     permissions = [];
     roles = ["LESSON.Teacher"];
-    relations = {class: Class};
+    relations = {class: SchoolClass};
 }
 
-has_relation(school: School, "school", _: Class) if
+has_relation(school: School, "school", _: SchoolClass) if
     school = school;
 
 has_role(user: User, name: String, _: School) if
     role in RolesProvider.roles(user) and
-    role.getRoleID() = name;
+    role.getRole().getID() = name;
 
-has_role(user: User, name: String, class: Class) if
+has_role(user: User, name: String, class: SchoolClass) if
     role in RolesProvider.rolesInClass(user, class) and
-    role.getRoleID() = name;
+    role.getRole().getID() = name;
 
-has_permission(user: User, "read_absence", class: Class) if
+has_permission(user: User, "read_absence", class: SchoolClass) if
     lesson in LessonsProvider.getTodayLessons(user) and
     lesson.getClassID() = class.getId();
 
-has_permission(user: User, "edit_absence", class: Class) if
+has_permission(user: User, "edit_absence", class: SchoolClass) if
     has_permission(user, "read_absence", class) and
     lesson in LessonsProvider.getTodayLessons(user) and
     lesson.getClassID() = class.getId() and
     TimeValidator.isCurrentLesson(lesson);
 
-has_permission(_: User, "read", _: Class);
+has_permission(_: User, "read", _: SchoolClass);
 
-has_relation(class: Class, "class", lesson: Lesson) if
+has_relation(class: SchoolClass, "class", lesson: Lesson) if
     lesson.classID = class.ID;
 
 allow(user: User, "read_lessons", target: User) if
@@ -79,9 +79,15 @@ allow(user: User, "read_lessons", target: User) if
 
 allow(user: User, "read_roles", target: User) if
     (user.getId() = target.getId()) or
-    (role in RolesProvider.roles(user) and role.getRole().getID().startsWith("SCHOOL")); # Users with any school-wide role `can read any user's roles
+    (role in RolesProvider.roles(user) and role.getRole().getID().startsWith("SCHOOL")); # Users with any school-wide role can read any user's roles
 
-allow(user: User, action: String, class: Class) if
+allow(user: User, "read_all_roles", _: Unit) if
+    role in RolesProvider.roles(user) and
+    role.getRole().getID().startsWith("SCHOOL"); # Users with any school-wide role can read all roles
+
+allow(_: User, "read", _: User);
+
+allow(user: User, action: String, class: SchoolClass) if
     has_permission(user, action, class);
 
 allow(user: User, action: String, school: School) if

@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/28/22, 12:01 AM
+ * Last updated: 8/7/22, 3:49 AM
  */
 
 package by.enrollie
@@ -39,6 +39,8 @@ import kotlin.io.path.Path
 lateinit var APPLICATION_METADATA: ApplicationMetadata
 fun main() {
     val logger = LoggerFactory.getLogger("BOOTSTRAP")
+    val environment = System.getenv()["EVERSITY_ENV"] ?: "prod"
+    require(environment == "prod" || environment == "dev") { "Environment must be either 'prod' or 'dev'" }
     val (metadata, schoolsByParserVersion) = run {
         val selfProperties =
             (Unit::class as Any).javaClass.classLoader.getResourceAsStream("selfInfo.properties")?.use {
@@ -117,6 +119,7 @@ fun main() {
             bindSingleton<DataRegistrarProviderInterface> { DataRegistrarImpl() }
             bindSingleton<CommandLineInterface> { CommandLine.instance }
             bindSingleton<AuthorizationInterface> { AuthorizationProviderImpl() }
+            bindSingleton<PluginsProviderInterface> { PluginsProviderImpl(plugins) }
         }
         @OptIn(UnsafeAPI::class) setProvidersCatalog(ProvidersCatalogImpl(dependencies))
         plugins
@@ -127,6 +130,7 @@ fun main() {
     System.getenv()["SENTRY_DSN"]?.let {
         Sentry.init(SentryOptions().apply {
             dsn = it
+            tracesSampleRate = if (environment == "prod") 0.8 else 1.0
             isPrintUncaughtStackTrace = true
             if (System.getenv()["EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY"]?.toBooleanStrictOrNull() == true) {
                 logger.warn("EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY is set to true. All exceptions will be logged, but not sent to Sentry.")
@@ -139,8 +143,10 @@ fun main() {
         it.setTag("schools-by-subdomain", SchoolsByParser.schoolSubdomain)
         it.setTag("schools-by-parser-version", schoolsByParserVersion)
         it.setTag("version", metadata.version)
+        it.setTag("environment", environment)
     }
     logger.debug("Starting server...")
+    Runtime.getRuntime().addShutdownHook(by.enrollie.util.ShutdownHook())
 
     embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
         configureKtorPlugins()

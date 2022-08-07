@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/5/22, 2:57 AM
+ * Last updated: 8/7/22, 3:49 AM
  */
 @file:Suppress("UNUSED")
 
@@ -293,6 +293,21 @@ interface DatabaseLessonsProviderInterface {
      * @see createOrUpdateLessons
      */
     fun setJournalTitles(mappedTitles: Map<JournalID, String>)
+
+    /**
+     * Returns all lessons in database
+     */
+    fun getAllLessons(): List<Lesson>
+
+    /**
+     * Returns all lessons in database on given date
+     */
+    fun getLessons(date: LocalDate): List<Lesson>
+
+    /**
+     * Returns all lessons in database in given range
+     */
+    fun getLessons(datesRange: Pair<LocalDate, LocalDate>): List<Lesson>
 }
 
 interface DatabaseTimetablePlacingProviderInterface {
@@ -417,6 +432,21 @@ interface DatabaseAbsenceProviderInterface {
      * @see getClassesWithoutAbsenceInfo
      */
     fun markClassAsDataRich(sentByID: UserID, classID: ClassID, date: LocalDate)
+
+    /**
+     * Returns all absences in database
+     */
+    fun getAllAbsences(): List<AbsenceRecord>
+
+    /**
+     * Returns all absences in database on given [datesRange]
+     */
+    fun getAbsences(datesRange: Pair<LocalDate, LocalDate>): List<AbsenceRecord>
+
+    /**
+     * Returns all absences in database on given [date]
+     */
+    fun getAbsences(date: LocalDate): List<AbsenceRecord>
 }
 
 interface DatabaseAuthenticationDataProviderInterface {

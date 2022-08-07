@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/17/22, 9:28 PM
+ * Last updated: 8/7/22, 3:49 AM
  */
 
 plugins {
@@ -13,7 +13,8 @@ plugins {
 }
 
 group = "by.enrollie"
-version = rootProject.version
+val libVersion = "0.1.2-alpha.1"
+version = libVersion
 
 repositories {
     mavenCentral()
@@ -71,7 +72,7 @@ publishing {
             }
             groupId = "by.enrollie"
             artifactId = "eversity-shared-api"
-            version = rootProject.version.toString()
+            version = libVersion
 
             from(components["java"])
         }

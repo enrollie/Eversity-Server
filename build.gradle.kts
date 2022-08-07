@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/26/22, 12:04 AM
+ * Last updated: 8/7/22, 3:49 AM
  */
 
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -56,11 +56,11 @@ dependencies {
     implementation("joda-time:joda-time:2.10.14")
     implementation("com.osohq:oso:0.26.1")
     implementation("com.newrelic.telemetry:micrometer-registry-new-relic:0.9.0")
-    implementation("io.micrometer:micrometer-registry-jmx:1.9.0")
-    implementation("io.sentry:sentry:6.1.4")
-    implementation("io.sentry:sentry-kotlin-extensions:6.1.4")
+    implementation("io.micrometer:micrometer-registry-jmx:1.9.2")
+    implementation("io.sentry:sentry:6.3.1")
+    implementation("io.sentry:sentry-kotlin-extensions:6.3.1")
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
-    implementation("org.kodein.di:kodein-di:7.12.0")
+    implementation("org.kodein.di:kodein-di:7.14.0")
 
     implementation("com.neitex:schools_parser:$schoolsByParserVersion")
 

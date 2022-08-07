@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/27/22, 11:23 PM
+ * Last updated: 8/7/22, 3:49 AM
  */
 
 package by.enrollie.plugins
@@ -17,6 +17,7 @@ import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.util.*
+import kotlinx.serialization.SerializationException
 import org.slf4j.LoggerFactory
 
 internal fun Application.configureStatusPages() {
@@ -25,13 +26,20 @@ internal fun Application.configureStatusPages() {
     }
     install(StatusPages) {
         exception<NotFoundException> { call, _ ->
-            logger.debug("User ${call.attributes[AttributeKey("userID")]} was restricted from reading ${call.request.path()}")
+            logger.debug("User ${call.attributes.getOrNull(AttributeKey("userID"))} (callID ${call.callId}) was restricted from reading ${call.request.path()}")
             call.respond(HttpStatusCode.NotFound)
         }
         exception<ForbiddenException> { call, _ ->
-            logger.debug("User ${call.attributes[AttributeKey("userID")]} was restricted from acting on ${call.request.path()}")
+            logger.debug("User ${call.attributes.getOrNull(AttributeKey("userID"))} (callID ${call.callId}) was restricted from acting on ${call.request.path()}")
             call.respond(HttpStatusCode.Forbidden)
         }
+        exception<SerializationException> { call, e ->
+            logger.debug(
+                "User ${call.attributes.getOrNull(AttributeKey("userID"))} (callID ${call.callId}) sent bad body to ${call.request.path()} (message: ${e.message})"
+            )
+            call.respond(HttpStatusCode.BadRequest)
+        }
+
         exception<Throwable> { call, cause ->
             logger.debug("CallID: ${call.callId}", cause)
             call.respond(HttpStatusCode.InternalServerError)

@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/1/22, 9:24 PM
+ * Last updated: 8/7/22, 3:49 AM
  */
 
 package by.enrollie.impl
@@ -20,6 +20,7 @@ interface ProvidersCatalogInterface {
     val configuration: ConfigurationInterface
     val commandLine: CommandLineInterface
     val authorization: AuthorizationInterface
+    val plugins: PluginsProviderInterface
 }
 
 class ProvidersCatalogImpl(override val di: DI) : ProvidersCatalogInterface, DIAware {
@@ -28,6 +29,7 @@ class ProvidersCatalogImpl(override val di: DI) : ProvidersCatalogInterface, DIA
     override val configuration: ConfigurationInterface by instance()
     override val commandLine: CommandLineInterface by instance()
     override val authorization: AuthorizationInterface by instance()
+    override val plugins: PluginsProviderInterface by instance()
 }
 
 private var providersCatalogField: ProvidersCatalogInterface? = null

@@ -3,15 +3,13 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/28/22, 12:01 AM
+ * Last updated: 8/7/22, 3:49 AM
  */
 
 package by.enrollie.impl
 
-import by.enrollie.data_classes.Lesson
-import by.enrollie.data_classes.SchoolClass
-import by.enrollie.data_classes.TeachingShift
-import by.enrollie.data_classes.User
+import by.enrollie.annotations.UnsafeAPI
+import by.enrollie.data_classes.*
 import by.enrollie.providers.AuthorizationInterface
 import com.osohq.oso.Oso
 import java.time.LocalDate
@@ -42,6 +40,20 @@ class AuthorizationProviderImpl : AuthorizationInterface {
     class RolesProvider {
         @Suppress("unused")
         fun roles(user: User) = ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.id)
+
+        @OptIn(UnsafeAPI::class)
+        fun rolesInClass(user: User, schoolClass: SchoolClass) =
+            ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.id).filter {
+                if (it.role is Roles.CLASS.ClassTeacher || it.role is Roles.CLASS.AbsenceProvider || it.role is Roles.CLASS.Student) {
+                    (it.unsafeGetField(Roles.CLASS.STUDENT.classID) == schoolClass.id || it.unsafeGetField(Roles.CLASS.CLASS_TEACHER.classID) == schoolClass.id || it.unsafeGetField(
+                        Roles.CLASS.ABSENCE_PROVIDER.classID
+                    ) == schoolClass.id) && (it.roleRevokedDateTime == null || it.roleRevokedDateTime!!.isAfter(
+                        LocalDateTime.now()
+                    ))
+                } else {
+                    false
+                }
+            }
     }
 
     private val oso: Oso = Oso()
@@ -49,8 +61,9 @@ class AuthorizationProviderImpl : AuthorizationInterface {
     init {
         oso.registerClass(User::class.java, "User")
         oso.registerClass(School::class.java, "School")
-        oso.registerClass(SchoolClass::class.java, "Class")
+        oso.registerClass(SchoolClass::class.java, "SchoolClass")
         oso.registerClass(Lesson::class.java, "Lesson")
+        oso.registerClass(Unit::class.java, "Unit")
         oso.registerConstant(LessonsProvider(), "LessonsProvider")
         oso.registerConstant(TimeValidator(), "TimeValidator")
         oso.registerConstant(RolesProvider(), "RolesProvider")

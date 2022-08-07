@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/26/22, 12:44 AM
+ * Last updated: 8/7/22, 3:49 AM
  */
 
 package by.enrollie.plugins
@@ -17,6 +17,7 @@ import com.auth0.jwt.algorithms.Algorithm
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
+import io.ktor.util.*
 
 interface JwtProvider {
     fun getJwtVerifier(): JWTVerifier
@@ -57,6 +58,8 @@ internal fun Application.configureSecurity() {
                 val token = credential.payload.getClaim("token").asString()
                 val userId = credential.payload.getClaim("user").asInt()
                 if (ProvidersCatalog.databaseProvider.authenticationDataProvider.checkToken(token, userId)) {
+                    attributes.put(AttributeKey("userID"), userId)
+                    attributes.put(AttributeKey("token"), token)
                     UserPrincipal(userId, token)
                 } else {
                     null
