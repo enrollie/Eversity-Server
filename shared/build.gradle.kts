@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/7/22, 3:49 AM
+ * Last updated: 8/11/22, 7:32 PM
  */
 
 plugins {
@@ -13,7 +13,7 @@ plugins {
 }
 
 group = "by.enrollie"
-val libVersion = "0.1.2-alpha.1"
+val libVersion = "0.1.2-alpha.4"
 version = libVersion
 
 repositories {

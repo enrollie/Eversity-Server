@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/7/22, 3:49 AM
+ * Last updated: 8/11/22, 2:27 AM
  */
 @file:Suppress("UNUSED")
 
@@ -51,9 +51,7 @@ interface Event<T> {
     val subjectPrevState: T?
 
     enum class EventType {
-        CREATED,
-        UPDATED,
-        DELETED
+        CREATED, UPDATED, DELETED
     }
 }
 
@@ -61,9 +59,7 @@ interface DatabaseUserProviderInterface {
     val eventsFlow: SharedFlow<UserEvent>
 
     data class UserEvent(
-        override val eventType: Event.EventType,
-        override val eventSubject: User,
-        override val subjectPrevState: User?
+        override val eventType: Event.EventType, override val eventSubject: User, override val subjectPrevState: User?
     ) : Event<User>
 
     /**
@@ -116,10 +112,8 @@ interface DatabaseRolesProviderInterface {
         val userID: UserID,
         val role: Roles.Role,
         val informationHolder: RoleInformationHolder,
-        @kotlinx.serialization.Serializable(with = LocalDateTimeSerializer::class)
-        val creationDate: LocalDateTime = LocalDateTime.now(),
-        @kotlinx.serialization.Serializable(with = LocalDateTimeSerializer::class)
-        val expirationDate: LocalDateTime? = null
+        @kotlinx.serialization.Serializable(with = LocalDateTimeSerializer::class) val creationDate: LocalDateTime = LocalDateTime.now(),
+        @kotlinx.serialization.Serializable(with = LocalDateTimeSerializer::class) val expirationDate: LocalDateTime? = null
     )
 
     /**
@@ -169,6 +163,11 @@ interface DatabaseRolesProviderInterface {
      * @throws NoSuchElementException if role does not exist
      */
     fun revokeRole(roleID: String, revokeDateTime: LocalDateTime?)
+
+    /**
+     * Tells database to grant all "automatic" roles that are to be granted but not yet granted (i.e. [Roles.CLASS.TEACHER] role to newly created teachers).
+     */
+    fun triggerRolesUpdate()
 }
 
 interface DatabaseClassesProviderInterface {
@@ -355,12 +354,11 @@ interface DatabaseAbsenceProviderInterface {
      */
     @kotlinx.serialization.Serializable
     data class NewAbsenceRecord(
-        val creatorID: UserID,
+        val creatorRoleID: String,
         val classID: ClassID,
-        val studentRoleID: String,
+        val studentUserID: UserID,
         val absenceType: AbsenceType,
-        @kotlinx.serialization.Serializable(with = LocalDateSerializer::class)
-        val absenceDate: LocalDate,
+        @kotlinx.serialization.Serializable(with = LocalDateSerializer::class) val absenceDate: LocalDate,
         val skippedLessons: List<TimetablePlace>
     )
 
@@ -407,7 +405,7 @@ interface DatabaseAbsenceProviderInterface {
      * @throws ProtectedFieldEditException if [field] is protected and cannot be updated
      */
     fun <T : Any> updateAbsence(
-        updatedBy: UserID, absenceID: AbsenceID, field: Field<T>, value: T
+        updatedByRole: String, absenceID: AbsenceID, field: Field<T>, value: T
     )
 
     /**
@@ -431,7 +429,7 @@ interface DatabaseAbsenceProviderInterface {
      * @throws SchoolClassDoesNotExistException if class does not exist
      * @see getClassesWithoutAbsenceInfo
      */
-    fun markClassAsDataRich(sentByID: UserID, classID: ClassID, date: LocalDate)
+    fun markClassAsDataRich(sentByRole: String, classID: ClassID, date: LocalDate)
 
     /**
      * Returns all absences in database
@@ -453,8 +451,7 @@ interface DatabaseAuthenticationDataProviderInterface {
     val eventsFlow: SharedFlow<AuthenticationDataEvent>
 
     data class AuthenticationDataEvent(
-        override val eventType: Event.EventType,
-        override val eventSubject: AuthenticationToken,
+        override val eventType: Event.EventType, override val eventSubject: AuthenticationToken,
         /**
          * Always null since [AuthenticationToken] does not have editable fields.
          */

@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/25/22, 2:58 PM
+ * Last updated: 8/12/22, 3:18 AM
  */
 
 package by.enrollie.providers
@@ -18,4 +18,9 @@ interface AuthorizationInterface {
      * @return Nothing, if actor is authorized to do the action
      */
     fun authorize(actor: Any, action: String, resource: Any)
+
+    /**
+     * Filters out unauthorized recources from the list
+     */
+    fun <T> filterAllowed(actor: Any, action: String, resources: List<T>): List<T>
 }

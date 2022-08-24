@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/7/22, 3:49 AM
+ * Last updated: 8/15/22, 10:24 PM
  */
 
 package by.enrollie.util
@@ -32,7 +32,7 @@ class ShutdownHook : Thread() {
                 }
             }
             delay(2000)
-            logger.info("ShutdownHook finished")
+            logger.info("ShutdownHook finished. Goodbye and have a nice day! :)")
         }
     }
 }

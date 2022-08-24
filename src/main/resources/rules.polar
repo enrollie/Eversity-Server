@@ -14,11 +14,12 @@ actor User {
 # 2. Use RolesProvider constant to get user roles (it provides a list of roles with all needed optimizations)
 
 resource School{
-    permissions = ["read_statistics", "edit_absence"];
-    roles = ["SCHOOL.Administrator", "SCHOOL.SocialTeacher"];
+    permissions = ["read_statistics", "edit_absence", "read_all_absences"];
+    roles = ["SCHOOL.Administration", "SCHOOL.SocialTeacher"];
 
-    "read_statistics" if "SCHOOL.Administrator";
-    "read_statistics" if "SCHOOL.SocialTeacher";
+    "read_all_absences" if "SCHOOL.Administration";
+    "read_all_absences" if "SCHOOL.SocialTeacher";
+    "read_statistics" if "read_all_absences";
     "edit_absence" if "read_statistics"; # May be changed in the future
 }
 
@@ -37,18 +38,15 @@ resource SchoolClass{
     "edit_absence" if "CLASS.AbsenceProvider";
     "edit_absence" if "edit_absence" on "school";
     "request_sync" if "CLASS.ClassTeacher";
-    "request_sync" if "SCHOOL.Administrator" on "school";
+    "request_sync" if "SCHOOL.Administration" on "school";
     "request_sync" if "SCHOOL.SocialTeacher" on "school";
 }
 
 resource Lesson{
     permissions = [];
-    roles = ["LESSON.Teacher"];
+    roles = [];
     relations = {class: SchoolClass};
 }
-
-has_relation(school: School, "school", _: SchoolClass) if
-    school = school;
 
 has_role(user: User, name: String, _: School) if
     role in RolesProvider.roles(user) and
@@ -57,6 +55,8 @@ has_role(user: User, name: String, _: School) if
 has_role(user: User, name: String, class: SchoolClass) if
     role in RolesProvider.rolesInClass(user, class) and
     role.getRole().getID() = name;
+
+has_relation(School: School, "school", _: SchoolClass);
 
 has_permission(user: User, "read_absence", class: SchoolClass) if
     lesson in LessonsProvider.getTodayLessons(user) and

@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/7/22, 3:49 AM
+ * Last updated: 8/24/22, 7:50 PM
  */
 
 package by.enrollie.routes
@@ -15,6 +15,7 @@ import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.plugins.UserPrincipal
 import by.enrollie.providers.DatabaseAbsenceProviderInterface
 import by.enrollie.serializers.LocalDateSerializer
+import by.enrollie.util.RoleUtil
 import by.enrollie.util.parseDate
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -123,18 +124,25 @@ private fun Route.AbsenceClassIDPut() {
         if (!validateLessonsList(body.lessonsList, classID, body.date)) {
             return@put call.respond(HttpStatusCode.BadRequest)
         }
-        val studentRole =
-            ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesWithMatchingEntries(Roles.CLASS.STUDENT.classID to classID)
-                .firstOrNull {
-                    it.userID == body.studentID && body.date.isBetweenOrEqual(
-                        it.roleGrantedDateTime.toLocalDate(),
-                        it.roleRevokedDateTime?.toLocalDate() ?: LocalDate.now().plusYears(1)
-                    )
-                } ?: return@put call.respond(HttpStatusCode.NotFound)
+        ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesWithMatchingEntries(Roles.CLASS.STUDENT.classID to classID)
+            .firstOrNull {
+                it.userID == body.studentID && body.date.isBetweenOrEqual(
+                    it.roleGrantedDateTime.toLocalDate(),
+                    it.roleRevokedDateTime?.toLocalDate() ?: LocalDate.now().plusYears(1)
+                )
+            } ?: return@put call.respond(HttpStatusCode.NotFound)
+        val fittingRole = RoleUtil.findRoleToWriteAbsence(
+            ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.userID), classID
+        ) ?: return@put call.respond(HttpStatusCode.Forbidden)
         val result = kotlin.runCatching {
             ProvidersCatalog.databaseProvider.absenceProvider.createAbsence(
                 DatabaseAbsenceProviderInterface.NewAbsenceRecord(
-                    user.userID, classID, studentRole.uniqueID, body.absenceType, body.date, body.lessonsList.distinct()
+                    fittingRole.uniqueID,
+                    classID,
+                    body.studentID,
+                    body.absenceType,
+                    body.date,
+                    body.lessonsList.distinct()
                 )
             )
         }
@@ -142,7 +150,7 @@ private fun Route.AbsenceClassIDPut() {
             if (result.exceptionOrNull() is AbsenceRecordsConflictException) {
                 val existingRecord =
                     ProvidersCatalog.databaseProvider.absenceProvider.getAbsencesForClass(classID, body.date)
-                        .first { it.studentRole.userID == studentRole.userID }
+                        .first { it.student.id == body.studentID }
                 return@put call.respond(HttpStatusCode.Conflict, existingRecord)
             } else {
                 throw result.exceptionOrNull()!!
@@ -168,6 +176,9 @@ private fun Route.AbsenceClassIDPatch() {
         ProvidersCatalog.authorization.authorize(
             user.getUserFromDB(), "edit_absence", schoolClass
         )
+        val fittingRole = RoleUtil.findRoleToWriteAbsence(
+            ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.userID), schoolClass.id
+        ) ?: return@patch call.respond(HttpStatusCode.Forbidden)
         val body = call.receive<AbsencePatchRequest>()
         val absence =
             ProvidersCatalog.databaseProvider.absenceProvider.getAbsence(body.absenceID) ?: return@patch call.respond(
@@ -181,13 +192,13 @@ private fun Route.AbsenceClassIDPatch() {
                 return@patch call.respond(HttpStatusCode.BadRequest)
             }
             ProvidersCatalog.databaseProvider.absenceProvider.updateAbsence(
-                user.userID, absence.id, Field(AbsenceRecord::lessonsList), body.lessonsList
+                fittingRole.uniqueID, absence.id, Field(AbsenceRecord::lessonsList), body.lessonsList
             )
         }
         if (body.absenceType != null) {
             kotlin.runCatching {
                 ProvidersCatalog.databaseProvider.absenceProvider.updateAbsence(
-                    user.userID, body.absenceID, Field(AbsenceRecord::absenceType), body.absenceType
+                    fittingRole.uniqueID, body.absenceID, Field(AbsenceRecord::absenceType), body.absenceType
                 )
             }.fold({}, {
                 throw it
@@ -215,7 +226,14 @@ private fun Route.AbsenceClassIDEmptyData() {
         if (!date.isBetweenOrEqual(LocalDate.now().minusDays(3), LocalDate.now().plusDays(3))) {
             return@post call.respond(HttpStatusCode.BadRequest)
         }
-        ProvidersCatalog.databaseProvider.absenceProvider.markClassAsDataRich(user.userID, schoolClass.id, date)
+        val fittingRole = RoleUtil.findRoleToWriteAbsence(
+            ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.userID), schoolClass.id
+        ) ?: return@post call.respond(HttpStatusCode.Forbidden)
+        ProvidersCatalog.databaseProvider.absenceProvider.markClassAsDataRich(
+            fittingRole.uniqueID,
+            schoolClass.id,
+            date
+        )
         call.respond(HttpStatusCode.OK)
     }
 }

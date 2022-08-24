@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/1/22, 9:24 PM
+ * Last updated: 8/24/22, 7:50 PM
  */
 
 package by.enrollie.impl
@@ -211,7 +211,7 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
                     ).fold({
                         it.filterNot { it.journalID == null }.map {
                             Lesson(
-                                it.lessonID,
+                                it.lessonID.toULong(),
                                 it.title,
                                 it.date,
                                 it.place,
@@ -340,6 +340,16 @@ class DataRegistrarImpl : DataRegistrarProviderInterface {
                         )
                     )
                 }
+                ProvidersCatalog.databaseProvider.customCredentialsProvider.setCredentials(
+                    userID,
+                    "schools-csrfToken",
+                    credentials.csrfToken
+                )
+                ProvidersCatalog.databaseProvider.customCredentialsProvider.setCredentials(
+                    userID,
+                    "schools-sessionID",
+                    credentials.sessionID
+                )
                 val token = ProvidersCatalog.databaseProvider.authenticationDataProvider.generateNewToken(userID)
                 broadcaster.emit(
                     DataRegistrarProviderInterface.Message(

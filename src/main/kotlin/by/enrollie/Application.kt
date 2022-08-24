@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/7/22, 3:49 AM
+ * Last updated: 8/24/22, 7:50 PM
  */
 
 package by.enrollie
@@ -13,8 +13,11 @@ import by.enrollie.impl.*
 import by.enrollie.plugins.configureKtorPlugins
 import by.enrollie.plugins.configureStartStopListener
 import by.enrollie.privateProviders.ApplicationMetadata
+import by.enrollie.privateProviders.EventSchedulerInterface
+import by.enrollie.privateProviders.TemplatingEngineInterface
 import by.enrollie.providers.*
 import by.enrollie.routes.registerAllRoutes
+import by.enrollie.util.StartupRoutine
 import by.enrollie.util.getServices
 import com.neitex.SchoolsByParser
 import io.ktor.server.engine.*
@@ -41,6 +44,7 @@ fun main() {
     val logger = LoggerFactory.getLogger("BOOTSTRAP")
     val environment = System.getenv()["EVERSITY_ENV"] ?: "prod"
     require(environment == "prod" || environment == "dev") { "Environment must be either 'prod' or 'dev'" }
+    logger.info("Starting application in \'$environment\' environment...")
     val (metadata, schoolsByParserVersion) = run {
         val selfProperties =
             (Unit::class as Any).javaClass.classLoader.getResourceAsStream("selfInfo.properties")?.use {
@@ -120,6 +124,9 @@ fun main() {
             bindSingleton<CommandLineInterface> { CommandLine.instance }
             bindSingleton<AuthorizationInterface> { AuthorizationProviderImpl() }
             bindSingleton<PluginsProviderInterface> { PluginsProviderImpl(plugins) }
+            bindSingleton<EventSchedulerInterface> { EventSchedulerImpl() }
+            bindSingleton<SchoolsByMonitorInterface> { SchoolsByMonitorImpl() }
+            bindSingleton<TemplatingEngineInterface> { TemplatingEngineImpl() }
         }
         @OptIn(UnsafeAPI::class) setProvidersCatalog(ProvidersCatalogImpl(dependencies))
         plugins
@@ -127,6 +134,8 @@ fun main() {
     // Configure dependencies
     SchoolsByParser.setSubdomain(ProvidersCatalog.configuration.schoolsByConfiguration.baseUrl)
     logger.debug("SchoolsByParser subdomain: ${SchoolsByParser.schoolSubdomain}")
+    logger.debug("Initialized Schools.by status monitor")
+    ProvidersCatalog.schoolsByStatus.init()
     System.getenv()["SENTRY_DSN"]?.let {
         Sentry.init(SentryOptions().apply {
             dsn = it
@@ -145,7 +154,11 @@ fun main() {
         it.setTag("version", metadata.version)
         it.setTag("environment", environment)
     }
+    if (System.getenv()["EVERSITY_STRESS_TEST_MODE"]?.toBooleanStrictOrNull() == true) {
+        logger.warn("EVERSITY_STRESS_TEST_MODE is set to true. This server will be running in stress test mode. Communications with outside services using user-supplied data will be minimized. (though, some plugins may not respect this mode)")
+    }
     logger.debug("Starting server...")
+    @OptIn(UnsafeAPI::class) StartupRoutine.schedule(ProvidersCatalog.eventScheduler)
     Runtime.getRuntime().addShutdownHook(by.enrollie.util.ShutdownHook())
 
     embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
@@ -159,5 +172,5 @@ fun main() {
     plugins.forEach {
         it.onUnload()
     }
-    logger.info("All plugins are unloaded. Goodbye and have a nice day! :)")
+    logger.info("Everything is unloaded. Goodbye and have a nice day! :)")
 }

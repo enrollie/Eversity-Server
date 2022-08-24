@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/1/22, 9:24 PM
+ * Last updated: 8/24/22, 7:50 PM
  */
 @file:Suppress("UNUSED")
 
@@ -82,10 +82,22 @@ sealed class Roles private constructor() {
         }
 
         val CLASS_TEACHER = ClassTeacher()
+
+        class Teacher internal constructor() : Role {
+            val classID: Role.Field<ClassID> = Role.Field(this, "classID", true, ClassID::class.starProjectedType)
+            val journalID: Role.Field<JournalID> =
+                Role.Field(this, "journalID", true, JournalID::class.starProjectedType)
+
+            override fun toString(): String = "CLASS.Teacher"
+            override val properties: List<Role.Field<*>> = listOf(classID, journalID)
+        }
+
+        val TEACHER = Teacher()
         override fun roleByID(id: String): Role? = when (id.split(".")[1]) {
             "AbsenceProvider" -> ABSENCE_PROVIDER
             "Student" -> STUDENT
             "ClassTeacher" -> CLASS_TEACHER
+            "Teacher" -> TEACHER
             else -> null
         }
     }

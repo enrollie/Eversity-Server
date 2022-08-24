@@ -3,12 +3,14 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/7/22, 3:49 AM
+ * Last updated: 8/12/22, 3:26 AM
  */
 
 package by.enrollie.impl
 
 import by.enrollie.annotations.UnsafeAPI
+import by.enrollie.privateProviders.EventSchedulerInterface
+import by.enrollie.privateProviders.TemplatingEngineInterface
 import by.enrollie.providers.*
 import org.kodein.di.DI
 import org.kodein.di.DIAware
@@ -21,6 +23,9 @@ interface ProvidersCatalogInterface {
     val commandLine: CommandLineInterface
     val authorization: AuthorizationInterface
     val plugins: PluginsProviderInterface
+    val eventScheduler: EventSchedulerInterface
+    val schoolsByStatus: SchoolsByMonitorInterface
+    val templatingEngine: TemplatingEngineInterface
 }
 
 class ProvidersCatalogImpl(override val di: DI) : ProvidersCatalogInterface, DIAware {
@@ -30,6 +35,9 @@ class ProvidersCatalogImpl(override val di: DI) : ProvidersCatalogInterface, DIA
     override val commandLine: CommandLineInterface by instance()
     override val authorization: AuthorizationInterface by instance()
     override val plugins: PluginsProviderInterface by instance()
+    override val eventScheduler: EventSchedulerInterface by instance()
+    override val schoolsByStatus: SchoolsByMonitorInterface by instance()
+    override val templatingEngine: TemplatingEngineInterface by instance()
 }
 
 private var providersCatalogField: ProvidersCatalogInterface? = null

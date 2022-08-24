@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/7/22, 3:49 AM
+ * Last updated: 8/16/22, 12:14 AM
  */
 
 package by.enrollie.plugins
@@ -12,6 +12,7 @@ import com.osohq.oso.Exceptions.ForbiddenException
 import com.osohq.oso.Exceptions.NotFoundException
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.plugins.*
 import io.ktor.server.plugins.callid.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
@@ -37,6 +38,9 @@ internal fun Application.configureStatusPages() {
             logger.debug(
                 "User ${call.attributes.getOrNull(AttributeKey("userID"))} (callID ${call.callId}) sent bad body to ${call.request.path()} (message: ${e.message})"
             )
+            call.respond(HttpStatusCode.BadRequest)
+        }
+        exception<BadRequestException> { call, _ ->
             call.respond(HttpStatusCode.BadRequest)
         }
 

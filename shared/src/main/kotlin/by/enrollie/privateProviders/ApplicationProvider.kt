@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/1/22, 9:24 PM
+ * Last updated: 8/12/22, 3:26 AM
  */
 
 package by.enrollie.privateProviders
@@ -16,4 +16,6 @@ interface ApplicationProvider {
     val configuration: ConfigurationInterface
     val database: DatabaseProviderInterface
     val tokenSigner: TokenSignerProvider
+    val eventScheduler: EventSchedulerInterface
+    val templatingEngine: TemplatingEngineInterface
 }

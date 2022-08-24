@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/28/22, 12:00 AM
+ * Last updated: 8/24/22, 7:50 PM
  */
 
 package by.enrollie.serializers
@@ -13,6 +13,7 @@ import by.enrollie.data_classes.RoleInformationHolder
 import by.enrollie.data_classes.Roles
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -39,9 +40,13 @@ class RoleInformationSerializer : KSerializer<RoleInformationHolder> {
         val map = decoder.decodeSerializableValue(
             MapSerializer(String.serializer(), JsonElement.serializer())
         )
-        return RoleInformationHolder(*map.map {
-            val field = Roles.getRoleByID(it.key)!!.fieldByID(it.key)!!
-            field to Json.decodeFromJsonElement(serializer(field.type), it.value)
-        }.toTypedArray())
+        return try {
+            RoleInformationHolder(*map.map {
+                val field = Roles.getRoleByID(it.key)!!.fieldByID(it.key)!!
+                field to Json.decodeFromJsonElement(serializer(field.type), it.value)
+            }.toTypedArray())
+        } catch (e: Exception) {
+            throw SerializationException(e.message)
+        }
     }
 }

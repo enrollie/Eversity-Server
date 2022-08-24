@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 7/28/22, 12:01 AM
+ * Last updated: 8/15/22, 11:36 PM
  */
 
 package by.enrollie.serializers
@@ -21,7 +21,11 @@ class RoleSerializer : KSerializer<Roles.Role> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Role", PrimitiveKind.STRING)
 
     override fun deserialize(decoder: Decoder): Roles.Role {
-        return Roles.getRoleByID(decoder.decodeString()) ?: throw SerializationException("Invalid role ID")
+        return try {
+            Roles.getRoleByID(decoder.decodeString()) ?: throw SerializationException("Invalid role ID")
+        } catch (e: Exception) {
+            throw SerializationException(e.message ?: "Invalid role ID")
+        }
     }
 
     override fun serialize(encoder: Encoder, value: Roles.Role) {

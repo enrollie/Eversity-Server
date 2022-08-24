@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/7/22, 3:49 AM
+ * Last updated: 8/13/22, 11:53 PM
  */
 
 package by.enrollie.plugins
@@ -12,9 +12,7 @@ import by.enrollie.APPLICATION_METADATA
 import by.enrollie.annotations.UnsafeAPI
 import by.enrollie.data_classes.User
 import by.enrollie.impl.ProvidersCatalog
-import by.enrollie.privateProviders.ApplicationMetadata
-import by.enrollie.privateProviders.ApplicationProvider
-import by.enrollie.privateProviders.TokenSignerProvider
+import by.enrollie.privateProviders.*
 import by.enrollie.providers.ConfigurationInterface
 import by.enrollie.providers.DatabaseProviderInterface
 import by.enrollie.providers.PluginMetadataInterface
@@ -56,6 +54,8 @@ internal fun Application.configureStartStopListener(plugins: List<PluginMetadata
             override val tokenSigner: TokenSignerProvider = object : TokenSignerProvider {
                 override fun signToken(user: User, token: String): String = jwtProvider.signToken(user, token)
             }
+            override val eventScheduler: EventSchedulerInterface = ProvidersCatalog.eventScheduler
+            override val templatingEngine: TemplatingEngineInterface = ProvidersCatalog.templatingEngine
         }
         plugins.forEach {
             logger.debug("Calling onStart() on ${it.name}")

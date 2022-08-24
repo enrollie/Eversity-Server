@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/3/22, 10:03 PM
+ * Last updated: 8/11/22, 3:10 AM
  */
 
 package by.enrollie.data_classes
@@ -19,17 +19,17 @@ typealias AbsenceID = Long
 @Serializable
 data class AbsenceRecord(
     val id: AbsenceID,
-    val studentRole: RoleData,
+    val student: User,
     @Serializable(with = LocalDateSerializer::class)
     val absenceDate: LocalDate,
     @SerialName("classId")
     val classID: ClassID,
     val absenceType: AbsenceType,
     val lessonsList: List<TimetablePlace>,
-    val createdBy: UserID,
+    val createdBy: AuthorizedChangeAuthor,
     @Serializable(with = LocalDateTimeSerializer::class)
     val created: LocalDateTime,
-    val lastUpdatedBy: UserID?,
+    val lastUpdatedBy: AuthorizedChangeAuthor?,
     @Serializable(with = LocalDateTimeSerializer::class)
     val lastUpdated: LocalDateTime?
 )

@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/7/22, 3:49 AM
+ * Last updated: 8/14/22, 1:39 AM
  */
 
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -55,7 +55,7 @@ dependencies {
     implementation("com.github.ajalt.mordant:mordant:2.0.0-beta2")
     implementation("joda-time:joda-time:2.10.14")
     implementation("com.osohq:oso:0.26.1")
-    implementation("com.newrelic.telemetry:micrometer-registry-new-relic:0.9.0")
+    implementation("io.micrometer:micrometer-registry-datadog:1.9.3")
     implementation("io.micrometer:micrometer-registry-jmx:1.9.2")
     implementation("io.sentry:sentry:6.3.1")
     implementation("io.sentry:sentry-kotlin-extensions:6.3.1")
@@ -63,6 +63,13 @@ dependencies {
     implementation("org.kodein.di:kodein-di:7.14.0")
 
     implementation("com.neitex:schools_parser:$schoolsByParserVersion")
+
+    implementation("fr.opensagres.xdocreport:fr.opensagres.xdocreport.document.docx:2.0.3")
+    implementation("fr.opensagres.xdocreport:fr.opensagres.xdocreport.converter.docx.xwpf:2.0.3")
+    implementation("fr.opensagres.xdocreport:fr.opensagres.xdocreport.template.velocity:2.0.3")
+
+    implementation("io.ktor:ktor-client-core:$ktorVersion")
+    implementation("io.ktor:ktor-client-cio:$ktorVersion")
 
     implementation("org.jline:jline:3.21.0")
     implementation("org.fusesource.jansi:jansi:2.4.0")

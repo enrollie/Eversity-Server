@@ -3,12 +3,13 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/1/22, 9:24 PM
+ * Last updated: 8/15/22, 11:33 PM
  */
 
 package by.enrollie.serializers
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -24,7 +25,11 @@ class LocalDateTimeSerializer : KSerializer<LocalDateTime> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LocalDateTime", PrimitiveKind.STRING)
 
     override fun deserialize(decoder: Decoder): LocalDateTime {
-        return ZonedDateTime.parse(decoder.decodeString(), formatter).toLocalDateTime()
+        return try {
+            ZonedDateTime.parse(decoder.decodeString(), formatter).toLocalDateTime()
+        } catch (e: Exception) {
+            throw SerializationException(e.message)
+        }
     }
 
     override fun serialize(encoder: Encoder, value: LocalDateTime) {

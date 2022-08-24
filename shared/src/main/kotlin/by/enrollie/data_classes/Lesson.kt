@@ -3,7 +3,7 @@
  * Author: Pavel Matusevich
  * Licensed under GNU AGPLv3
  * All rights are reserved.
- * Last updated: 8/1/22, 9:24 PM
+ * Last updated: 8/15/22, 11:48 PM
  */
 
 package by.enrollie.data_classes
@@ -11,7 +11,7 @@ package by.enrollie.data_classes
 import by.enrollie.serializers.LocalDateSerializer
 import java.time.LocalDate
 
-typealias LessonID = Long // Who knows how many lessons there will be in the future :)
+typealias LessonID = ULong // Who knows how many lessons there will be in the future :)
 typealias JournalID = Int
 
 @kotlinx.serialization.Serializable
