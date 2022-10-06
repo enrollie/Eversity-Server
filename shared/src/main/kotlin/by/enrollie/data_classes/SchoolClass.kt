@@ -8,6 +8,8 @@
 
 package by.enrollie.data_classes
 
+import kotlinx.serialization.SerialName
+
 typealias ClassID = Int
 
 typealias SubgroupID = Int
@@ -23,4 +25,14 @@ data class SchoolClass(
     val id: ClassID,
     val title: String,
     val shift: TeachingShift,
+)
+
+@kotlinx.serialization.Serializable
+data class Subgroup(
+    val id: SubgroupID,
+    val title: String,
+    @SerialName("classId")
+    val classID: ClassID,
+    @SerialName("currentMembers")
+    val members: List<UserID>
 )

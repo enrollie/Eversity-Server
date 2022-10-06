@@ -18,4 +18,6 @@ interface ApplicationProvider {
     val tokenSigner: TokenSignerProvider
     val eventScheduler: EventSchedulerInterface
     val templatingEngine: TemplatingEngineInterface
+    val commandLine: CommandLineInterface
+    val routing: RoutingInterface
 }

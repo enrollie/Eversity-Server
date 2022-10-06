@@ -15,8 +15,6 @@ import by.enrollie.serializers.RoleInformationSerializer
 import by.enrollie.serializers.RoleSerializer
 import java.time.LocalDateTime
 import kotlin.reflect.KType
-import kotlin.reflect.KTypeProjection
-import kotlin.reflect.full.createType
 import kotlin.reflect.full.starProjectedType
 
 /**
@@ -61,16 +59,11 @@ sealed class Roles private constructor() {
 
         class Student internal constructor() : Role {
             val classID: Role.Field<ClassID> = Role.Field(this, "classID", true, ClassID::class.starProjectedType)
-            val subgroups: Role.Field<List<SubgroupID>> = Role.Field(
-                this, "subgroups", false, List::class.createType(
-                    listOf(KTypeProjection.invariant(SubgroupID::class.starProjectedType))
-                )
-            )
 
             override fun toString(): String = "CLASS.Student"
 
             // List of all properties of the class.
-            override val properties: List<Role.Field<*>> = listOf(classID, subgroups)
+            override val properties: List<Role.Field<*>> = listOf(classID)
         }
 
         val STUDENT = Student()

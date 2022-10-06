@@ -12,14 +12,20 @@ import by.enrollie.annotations.UnsafeAPI
 import by.enrollie.data_classes.EventConstraints
 import by.enrollie.data_classes.TimetableCell
 import by.enrollie.data_classes.TimetablePlaces
+import by.enrollie.exceptions.RateLimitException
 import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.privateProviders.EventSchedulerInterface
+import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import com.neitex.SchoolsByParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 
 @UnsafeAPI
 object StartupRoutine {
@@ -27,13 +33,33 @@ object StartupRoutine {
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
     private val logger = LoggerFactory.getLogger(this::class.java)
     fun schedule(schedulerInterface: EventSchedulerInterface) {
+        ProvidersCatalog.commandLine.registerCommand(LiteralArgumentBuilder.literal<Unit?>("exit").executes {
+            logger.info("Shutting down...")
+            Runtime.getRuntime().exit(0)
+            0
+        })
         schedulerInterface.scheduleOnce(DEFAULT_DELAY) {
             coroutineScope.launch {
                 updateBellsTimetable()
             }
-            //TODO: sync data with schools.by
         }.also {
             logger.debug("Startup routine scheduled, id=$it")
+        }
+        val runTime = LocalDate.now().plusDays(1).atStartOfDay()
+        schedulerInterface.scheduleOnce(ChronoUnit.MILLIS.between(LocalDateTime.now(), runTime)) {
+            coroutineScope.launch {
+                launch { updateBellsTimetable() }
+                ProvidersCatalog.databaseProvider.classesProvider.getClasses().forEach {
+                    logger.debug("Scheduling class ${it.id} to sync with schools.by")
+                    try {
+                        ProvidersCatalog.registrarProvider.addClassToSyncQueue(it.id)
+                    } catch (e: RateLimitException) {
+                        logger.warn("Rate limit for class ${it.id} exceeded, skipping")
+                    }
+                    delay(DEFAULT_DELAY)
+                }
+
+            }
         }
     }
 
@@ -44,16 +70,16 @@ object StartupRoutine {
             logger.error("Failed to get bells timetable", bellsResult.exceptionOrNull())
             return
         }
-        val firstShift = bellsResult.getOrThrow().first.map {
-            TimetableCell(it.place, it.constraints.let {
+        val firstShift = bellsResult.getOrThrow().first.map { timetablePlace ->
+            TimetableCell(timetablePlace.place, timetablePlace.constraints.let {
                 EventConstraints(
                     LocalTime.of(it.startHour.toInt(), it.startMinute.toInt()),
                     LocalTime.of(it.endHour.toInt(), it.endMinute.toInt())
                 )
             })
         }
-        val secondShift = bellsResult.getOrThrow().second.map {
-            TimetableCell(it.place, it.constraints.let {
+        val secondShift = bellsResult.getOrThrow().second.map { timetablePlace ->
+            TimetableCell(timetablePlace.place, timetablePlace.constraints.let {
                 EventConstraints(
                     LocalTime.of(it.startHour.toInt(), it.startMinute.toInt()),
                     LocalTime.of(it.endHour.toInt(), it.endMinute.toInt())

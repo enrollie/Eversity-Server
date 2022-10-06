@@ -8,10 +8,8 @@
 
 package by.enrollie.routes
 
-import by.enrollie.data_classes.AbsenceRecord
-import by.enrollie.data_classes.AbsenceType
-import by.enrollie.data_classes.SchoolClass
-import by.enrollie.data_classes.TeachingShift
+import by.enrollie.data_classes.*
+import by.enrollie.extensions.isBetweenOrEqual
 import by.enrollie.impl.AuthorizationProviderImpl
 import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.plugins.UserPrincipal
@@ -22,6 +20,7 @@ import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -29,13 +28,14 @@ import kotlinx.serialization.descriptors.mapSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 @kotlinx.serialization.Serializable
 internal data class AbsencesGetResponse(
     val absences: List<AbsenceRecord>, val noData: List<SchoolClass>
 )
 
-private fun Route.AbsencesGet() {
+private fun Route.absencesGet() {
     get {
         val user = call.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
         ProvidersCatalog.authorization.authorize(
@@ -54,8 +54,16 @@ private fun Route.AbsencesGet() {
 }
 
 @kotlinx.serialization.Serializable
+internal data class AbsenceTotalStudentsByShift(
+    val firstShift: Int, val secondShift: Int,
+)
+
+@kotlinx.serialization.Serializable
 internal data class AbsencesSummaryElement(
-    val firstShift: Map<AbsenceType, Int>, val secondShift: Map<AbsenceType, Int>, val noData: List<SchoolClass>
+    val firstShift: Map<AbsenceType, Int>,
+    val secondShift: Map<AbsenceType, Int>,
+    val noDataClasses: List<SchoolClass>,
+    val totalStudents: AbsenceTotalStudentsByShift
 )
 
 @kotlinx.serialization.Serializable(with = AbsencesSummaryResponseSerializer::class)
@@ -64,6 +72,7 @@ internal data class AbsencesSummaryResponse(
 )
 
 private class AbsencesSummaryResponseSerializer : KSerializer<AbsencesSummaryResponse> {
+    @OptIn(ExperimentalSerializationApi::class)
     override val descriptor: SerialDescriptor =
         mapSerialDescriptor(LocalDateSerializer().descriptor, AbsencesSummaryElement.serializer().descriptor)
 
@@ -80,7 +89,7 @@ private class AbsencesSummaryResponseSerializer : KSerializer<AbsencesSummaryRes
     }
 }
 
-private fun Route.AbsencesSummaryGet() {
+private fun Route.absencesSummaryGet() {
     get("/summary") {
         val user = call.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
         ProvidersCatalog.authorization.authorize(
@@ -99,60 +108,93 @@ private fun Route.AbsencesSummaryGet() {
             return@get call.respond(HttpStatusCode.BadRequest)
         }
         val (absences, dates) = if (startDate != null && endDate != null) {
-            ProvidersCatalog.databaseProvider.absenceProvider.getAbsences(startDate to endDate) to startDate.datesUntil(
+            ProvidersCatalog.databaseProvider.absenceProvider.getAbsences(startDate to endDate)
+                .fold(mutableMapOf<LocalDate, List<AbsenceRecord>>()) { acc, absenceRecord ->
+                    acc[absenceRecord.absenceDate] = (acc[absenceRecord.absenceDate] ?: listOf()).plus(absenceRecord)
+                    acc
+                } to startDate.datesUntil(
                 endDate.plusDays(1)
             ).toList()
         } else {
-            ProvidersCatalog.databaseProvider.absenceProvider.getAbsences(LocalDate.now()) to listOf(LocalDate.now())
+            ProvidersCatalog.databaseProvider.absenceProvider.getAbsences(LocalDate.now())
+                .fold(mutableMapOf<LocalDate, List<AbsenceRecord>>()) { acc, absenceRecord ->
+                    acc[absenceRecord.absenceDate] = (acc[absenceRecord.absenceDate] ?: listOf()).plus(absenceRecord)
+                    acc
+                } to listOf(LocalDate.now())
         }
-        val classes = ProvidersCatalog.databaseProvider.classesProvider.getClasses()
-        val noData = if (classes.size < dates.size) {
-            classes.map { schoolClass ->
-                ProvidersCatalog.databaseProvider.absenceProvider.getDatesWithoutAbsenceInfo(
-                    schoolClass.id, (startDate ?: LocalDate.now()) to (endDate ?: LocalDate.now())
-                ).associateWith {
-                    schoolClass
+        val summary = ProvidersCatalog.databaseProvider.runInSingleTransaction { database ->
+            val classes = database.classesProvider.getClasses()
+            val noData = if (classes.size < dates.size) {
+                classes.map { schoolClass ->
+                    database.absenceProvider.getDatesWithoutAbsenceInfo(
+                        schoolClass.id, (startDate ?: LocalDate.now()) to (endDate ?: LocalDate.now())
+                    ).associateWith {
+                        schoolClass
+                    }
+                }.let { mapList ->
+                    mapList.fold<Map<LocalDate, SchoolClass>, MutableMap<LocalDate, List<SchoolClass>>>(mutableMapOf()) { map, pair ->
+                        pair.toList().forEach {
+                            map[it.first] = (map[it.first] ?: listOf()) + it.second
+                        }
+                        map
+                    }.let { map ->
+                        dates.associateWith {
+                            map[it] ?: listOf()
+                        }
+                    }
                 }
+            } else {
+                dates.associateWith { date ->
+                    val ids = database.absenceProvider.getClassesWithoutAbsenceInfo(date)
+                    classes.filter { it.id in ids }
+                }
+            }
+            val (firstShiftClasses, secondShiftClasses) = classes.partition {
+                it.shift == TeachingShift.FIRST
             }.let {
-                it.fold<Map<LocalDate, SchoolClass>, MutableMap<LocalDate, List<SchoolClass>>>(mutableMapOf()) { map, pair ->
-                    pair.toList().forEach {
-                        map[it.first] = (map[it.first] ?: listOf()) + it.second
-                    }
-                    map
-                }.let { map ->
-                    dates.associateWith {
-                        map[it] ?: listOf()
-                    }
-                }
+                it.first.map(SchoolClass::id) to it.second.map(SchoolClass::id)
             }
-        } else {
-            dates.associateWith {
-                val ids = ProvidersCatalog.databaseProvider.absenceProvider.getClassesWithoutAbsenceInfo(it)
-                classes.filter { it.id in ids }
+            val (firstShiftStudents, secondShiftStudents) = database.rolesProvider.getAllRolesByMatch {
+                it.role == Roles.CLASS.STUDENT && it.roleRevokedDateTime?.isBetweenOrEqual(
+                    startDate?.atStartOfDay() ?: LocalDateTime.now(),
+                    endDate?.atStartOfDay() ?: LocalDateTime.now().plusDays(1)
+                ) == false
+            }.partition {
+                it.getField(Roles.CLASS.STUDENT.classID) in firstShiftClasses
             }
-        }
-        val (firstShiftClasses, secondShiftClasses) = classes.partition {
-            it.shift == TeachingShift.FIRST
-        }.let {
-            it.first.map(SchoolClass::id) to it.second.map(SchoolClass::id)
-        }
-        val summary = dates.associateWith {
-            val firstShift = absences.filter { it.classID in firstShiftClasses }.groupBy { it.absenceType }.mapValues {
-                it.value.size
-            }.let { map ->
-                AbsenceType.values().associateWith {
-                    map[it] ?: 0
-                }
+            val summary = dates.associateWith { date ->
+                val firstShift =
+                    (absences[date] ?: listOf()).filter { it.classID in firstShiftClasses }.groupBy { it.absenceType }
+                        .mapValues {
+                            it.value.size
+                        }.let { map ->
+                            AbsenceType.values().associateWith {
+                                map[it] ?: 0
+                            }
+                        }
+                val secondShift =
+                    (absences[date] ?: listOf()).filter { it.classID in secondShiftClasses && it.absenceDate == date }
+                        .groupBy { it.absenceType }.mapValues {
+                            it.value.size
+                        }.let { map ->
+                            AbsenceType.values().associateWith {
+                                map[it] ?: 0
+                            }
+                        }
+                AbsencesSummaryElement(
+                    firstShift, secondShift, noData[date] ?: listOf(), AbsenceTotalStudentsByShift(
+                        firstShiftStudents.filter {
+                            it.roleGrantedDateTime.toLocalDate()
+                                .isBefore(date) && !(it.roleRevokedDateTime?.toLocalDate()?.isAfter(date) ?: false)
+                        }.size,
+                        secondShiftStudents.filter {
+                            it.roleGrantedDateTime.toLocalDate()
+                                .isBefore(date) && !(it.roleRevokedDateTime?.toLocalDate()?.isAfter(date) ?: false)
+                        }.size
+                    )
+                )
             }
-            val secondShift =
-                absences.filter { it.classID in secondShiftClasses }.groupBy { it.absenceType }.mapValues {
-                    it.value.size
-                }.let { map ->
-                    AbsenceType.values().associateWith {
-                        map[it] ?: 0
-                    }
-                }
-            AbsencesSummaryElement(firstShift, secondShift, noData[it] ?: listOf())
+            summary
         }
         call.respond(AbsencesSummaryResponse(summary))
     }
@@ -161,8 +203,8 @@ private fun Route.AbsencesSummaryGet() {
 internal fun Route.absences() {
     authenticate("jwt") {
         route("/absences") {
-            AbsencesGet()
-            AbsencesSummaryGet()
+            absencesGet()
+            absencesSummaryGet()
         }
     }
 }

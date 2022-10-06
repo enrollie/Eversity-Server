@@ -11,48 +11,56 @@ package by.enrollie.routes
 import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.plugins.UserPrincipal
 import by.enrollie.privateProviders.TemplatingEngineInterface
-import by.enrollie.util.FILENAME_DATE_TIME_FORMATTER
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
-import java.time.LocalDateTime
+import java.nio.file.Files
+import java.time.Duration
 
 @kotlinx.serialization.Serializable
 private data class TemplateRequest(
     val id: String, val fields: Map<String, String>
 )
 
+@kotlinx.serialization.Serializable
+private data class FilledTemplateResponse(
+    val filename: String, val mime: String, val url: String, val expiresIn: Long
+)
+
 internal fun Route.template() {
     authenticate("jwt") {
-        get("/template") {
-            val user = call.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
+        post("/template") {
+            val user = call.principal<UserPrincipal>() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val templateRequest = call.receive<TemplateRequest>()
             val template =
                 ProvidersCatalog.templatingEngine.availableTemplates.firstOrNull { it.templateID == templateRequest.id }
-                    ?: return@get call.respond(HttpStatusCode.NotFound)
-            template.fields.forEach { // Validate fields
-                when (it.type) {
-                    TemplatingEngineInterface.TemplateField.FieldType.DATE -> {}
-                    TemplatingEngineInterface.TemplateField.FieldType.STRING -> {}
+                    ?: return@post call.respond(HttpStatusCode.NotFound)
+            template.fields.forEach { field -> // Validate fields
+                when (field.type) {
+                    TemplatingEngineInterface.TemplateField.FieldType.DATE, TemplatingEngineInterface.TemplateField.FieldType.STRING -> {
+                    }
+
                     TemplatingEngineInterface.TemplateField.FieldType.CLASSID -> ProvidersCatalog.authorization.authorize(
                         user.getUserFromDB(),
-                        it.requiredPermission,
-                        ProvidersCatalog.databaseProvider.classesProvider.getClass(templateRequest.fields[it.id]?.let {
-                            it.toIntOrNull() ?: return@get call.respond(HttpStatusCode.BadRequest)
-                        } ?: return@get call.respond(HttpStatusCode.BadRequest)) ?: return@get call.respond(
+                        field.requiredPermission,
+                        ProvidersCatalog.databaseProvider.classesProvider.getClass(templateRequest.fields[field.id]?.let {
+                            it.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest)
+                        } ?: return@post call.respond(HttpStatusCode.BadRequest)) ?: return@post call.respond(
                             HttpStatusCode.NotFound
                         ))
 
                     TemplatingEngineInterface.TemplateField.FieldType.USERID -> ProvidersCatalog.authorization.authorize(
                         user.getUserFromDB(),
-                        it.requiredPermission,
-                        ProvidersCatalog.databaseProvider.usersProvider.getUser(templateRequest.fields[it.id]?.let {
-                            it.toIntOrNull() ?: return@get call.respond(HttpStatusCode.BadRequest)
-                        } ?: return@get call.respond(HttpStatusCode.BadRequest)) ?: return@get call.respond(
+                        field.requiredPermission,
+                        ProvidersCatalog.databaseProvider.usersProvider.getUser(templateRequest.fields[field.id]?.let {
+                            it.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest)
+                        } ?: return@post call.respond(HttpStatusCode.BadRequest)) ?: return@post call.respond(
                             HttpStatusCode.NotFound
                         ))
                 }
@@ -61,19 +69,22 @@ internal fun Route.template() {
                 ProvidersCatalog.templatingEngine.renderTemplate(templateRequest.id, templateRequest.fields)
             } catch (e: IllegalArgumentException) {
                 LoggerFactory.getLogger("TemplateRouter").error("Template input error", e)
-                return@get call.respond(HttpStatusCode.BadRequest)
+                return@post call.respond(HttpStatusCode.BadRequest)
             }
-            call.response.headers.append(
-                HttpHeaders.ContentDisposition, ContentDisposition.Attachment.withParameter(
-                    "filename", "${template.templateID}-${
-                        LocalDateTime.now().format(
-                            FILENAME_DATE_TIME_FORMATTER
-                        )
-                    }.${file.extension}"
-                ).toString()
+            val mime = withContext(Dispatchers.IO) {
+                Files.probeContentType(file.toPath())
+            }
+            val id = ProvidersCatalog.expiringFilesServer.registerNewFile(
+                file, ProvidersCatalog.configuration.serverConfiguration.tempFileTTL
             )
-            call.respondFile(file)
-            file.delete()
+            call.respond(
+                FilledTemplateResponse(
+                    file.name,
+                    mime,
+                    "${ProvidersCatalog.configuration.serverConfiguration.baseHttpUrl}/temp/file/${id}",
+                    Duration.ofMillis(ProvidersCatalog.configuration.serverConfiguration.tempFileTTL).toSeconds()
+                )
+            )
         }
     }
 }

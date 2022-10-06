@@ -42,6 +42,7 @@ class AuthorizationProviderImpl : AuthorizationInterface {
         fun roles(user: User) = ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.id)
 
         @OptIn(UnsafeAPI::class)
+        @Suppress("unused") // Used in Oso
         fun rolesInClass(user: User, schoolClass: SchoolClass) =
             ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.id).filter {
                 if (it.role is Roles.CLASS.ClassTeacher || it.role is Roles.CLASS.AbsenceProvider || it.role is Roles.CLASS.Student) {

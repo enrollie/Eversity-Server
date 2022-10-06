@@ -8,9 +8,16 @@
 
 package by.enrollie.data_classes
 
+import kotlinx.serialization.SerialName
+
 @kotlinx.serialization.Serializable
 data class Name(
-    val first: String, val middle: String? = null, val last: String
+    @SerialName("firstName")
+    val first: String,
+    @SerialName("middleName")
+    val middle: String? = null,
+    @SerialName("lastName")
+    val last: String
 ) {
     override fun toString(): String {
         return "$first${middle?.let { " $it" } ?: ""} $last"

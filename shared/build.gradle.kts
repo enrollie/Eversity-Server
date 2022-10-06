@@ -13,19 +13,22 @@ plugins {
 }
 
 group = "by.enrollie"
-val libVersion = "0.1.2-alpha.4"
+val libVersion = "0.1.3-alpha.3"
 version = libVersion
 
 repositories {
     mavenCentral()
+    maven { url = uri("https://libraries.minecraft.net") }
 }
 
 dependencies {
-    implementation(kotlin("stdlib"))
-    api("joda-time:joda-time:2.10.14")
-    api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3")
-    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
+    api(kotlin("stdlib"))
+    api("joda-time:joda-time:2.11.1")
+    api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.0")
     api("org.jetbrains.kotlin:kotlin-reflect:1.7.10")
+    api("io.ktor:ktor-server-core:2.1.1")
+    api("com.mojang:brigadier:1.0.18")
 }
 
 java {

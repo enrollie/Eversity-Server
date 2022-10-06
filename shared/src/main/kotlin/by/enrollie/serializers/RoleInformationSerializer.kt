@@ -41,8 +41,14 @@ class RoleInformationSerializer : KSerializer<RoleInformationHolder> {
             MapSerializer(String.serializer(), JsonElement.serializer())
         )
         return try {
-            RoleInformationHolder(*map.map {
-                val field = Roles.getRoleByID(it.key)!!.fieldByID(it.key)!!
+            RoleInformationHolder(*map.mapNotNull {
+                val field = Roles.getRoleByID(it.key)?.fieldByID(it.key)
+                if (field == null) {
+                    val yellowText = "\u001B[33m"
+                    val normalize = "\u001B[0m"
+                    println("${yellowText}RoleInformationSerializer: Field with id ${it.key} not found${normalize}")
+                    return@mapNotNull null
+                }
                 field to Json.decodeFromJsonElement(serializer(field.type), it.value)
             }.toTypedArray())
         } catch (e: Exception) {

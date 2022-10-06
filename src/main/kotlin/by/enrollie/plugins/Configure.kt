@@ -10,7 +10,6 @@ package by.enrollie.plugins
 
 import io.ktor.server.application.*
 
-
 fun Application.configureKtorPlugins() {
     configureStatusPages()
     configureSecurity()
@@ -18,4 +17,5 @@ fun Application.configureKtorPlugins() {
     configureMonitoring()
     configureSerialization()
     configureSockets()
+    install(insertTimePlugin)
 }

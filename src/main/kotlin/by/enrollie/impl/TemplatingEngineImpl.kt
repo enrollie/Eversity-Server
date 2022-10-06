@@ -17,6 +17,7 @@ import fr.opensagres.xdocreport.template.TemplateEngineKind
 import java.io.File
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.*
 
 class TemplatingEngineImpl : TemplatingEngineInterface {
     private val templatesWithHandlers: HashMap<TemplatingEngineInterface.Template, (Map<String, String>) -> File> =
@@ -115,8 +116,8 @@ private fun renderSchoolAbsenceTemplate(model: Map<String, String>): File {
     val (firstShiftClasses, secondShiftClasses) = ProvidersCatalog.databaseProvider.classesProvider.getClasses()
         .partition {
             it.shift == TeachingShift.FIRST
-        }.let {
-            it.first.map { it.id } to it.second.map { it.id }
+        }.let { listsPair ->
+            listsPair.first.map { it.id } to listsPair.second.map { it.id }
         }
     val pupilsFirstShift = ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch {
         it.role == Roles.CLASS.STUDENT && date.isBetweenOrEqual(
@@ -141,7 +142,10 @@ private fun renderSchoolAbsenceTemplate(model: Map<String, String>): File {
         put("firstShift", firstShiftData)
         put("secondShift", secondShiftData)
         put("schoolName", ProvidersCatalog.configuration.schoolConfiguration.title.nominative)
-        put("currentDate", date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)))
+        put(
+            "currentDate",
+            date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(Locale.forLanguageTag("ru-ru")))
+        )
     }
     val returnFile = File.createTempFile("schoolAbsence", ".docx")
     report.process(context, returnFile.outputStream())

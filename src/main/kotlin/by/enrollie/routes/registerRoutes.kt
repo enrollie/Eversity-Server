@@ -8,6 +8,7 @@
 
 package by.enrollie.routes
 
+import by.enrollie.impl.ProvidersCatalog
 import io.ktor.server.routing.*
 
 fun Route.registerAllRoutes() {
@@ -21,4 +22,7 @@ fun Route.registerAllRoutes() {
     templates()
     template()
     bellsTimetable()
+    getSchool()
+    teacher()
+    route("/temp/file") { ProvidersCatalog.expiringFilesServer.registerInRoute(this) }
 }

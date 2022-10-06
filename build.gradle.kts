@@ -33,6 +33,7 @@ repositories {
     mavenCentral()
     maven { url = uri("https://maven.pkg.jetbrains.space/public/p/ktor/eap") }
     maven { url = uri("https://packages.neitex.me/releases") }
+    maven { url = uri("https://libraries.minecraft.net") }
 }
 
 dependencies {
@@ -53,20 +54,20 @@ dependencies {
     implementation("io.ktor:ktor-server-websockets-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-netty-jvm:$ktorVersion")
     implementation("com.github.ajalt.mordant:mordant:2.0.0-beta2")
-    implementation("joda-time:joda-time:2.10.14")
-    implementation("com.osohq:oso:0.26.1")
+    implementation("joda-time:joda-time:2.11.1")
+    implementation("com.osohq:oso:0.26.2")
     implementation("io.micrometer:micrometer-registry-datadog:1.9.3")
-    implementation("io.micrometer:micrometer-registry-jmx:1.9.2")
-    implementation("io.sentry:sentry:6.3.1")
-    implementation("io.sentry:sentry-kotlin-extensions:6.3.1")
+    implementation("io.micrometer:micrometer-registry-jmx:1.9.3")
+    implementation("io.sentry:sentry:6.4.1")
+    implementation("io.sentry:sentry-kotlin-extensions:6.4.1")
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
     implementation("org.kodein.di:kodein-di:7.14.0")
 
     implementation("com.neitex:schools_parser:$schoolsByParserVersion")
 
-    implementation("fr.opensagres.xdocreport:fr.opensagres.xdocreport.document.docx:2.0.3")
-    implementation("fr.opensagres.xdocreport:fr.opensagres.xdocreport.converter.docx.xwpf:2.0.3")
-    implementation("fr.opensagres.xdocreport:fr.opensagres.xdocreport.template.velocity:2.0.3")
+    implementation("fr.opensagres.xdocreport:fr.opensagres.xdocreport.document.docx:2.0.4")
+    implementation("fr.opensagres.xdocreport:fr.opensagres.xdocreport.converter.docx.xwpf:2.0.4")
+    implementation("fr.opensagres.xdocreport:fr.opensagres.xdocreport.template.velocity:2.0.4")
 
     implementation("io.ktor:ktor-client-core:$ktorVersion")
     implementation("io.ktor:ktor-client-cio:$ktorVersion")
@@ -74,6 +75,7 @@ dependencies {
     implementation("org.jline:jline:3.21.0")
     implementation("org.fusesource.jansi:jansi:2.4.0")
     implementation("org.jline:jline-terminal-jansi:3.21.0")
+    implementation("com.mojang:brigadier:1.0.18")
 
 
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktorVersion")

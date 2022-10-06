@@ -8,13 +8,16 @@
 
 package by.enrollie.providers
 
+import by.enrollie.data_classes.ClassID
 import by.enrollie.data_classes.UserID
+import by.enrollie.exceptions.RateLimitException
+import com.neitex.Credentials
 import kotlinx.coroutines.flow.SharedFlow
 
-interface DataRegistrarProviderInterface {
+interface DataSourceCommunicatorInterface {
     @kotlinx.serialization.Serializable
     enum class MessageType {
-        INFORMATION, FAILURE, AUTHENTICATION, NAME
+        INFORMATION, FAILURE, AUTHENTICATION, SUCCESS
     }
 
     @kotlinx.serialization.Serializable
@@ -37,5 +40,13 @@ interface DataRegistrarProviderInterface {
     /**
      * Puts registration request to the queue and returns UUID that will be used to identify request.
      */
-    fun addToRegister(userID: UserID, schoolsByCredentials: com.neitex.Credentials): String
+    fun addToRegister(userID: UserID, schoolsByCredentials: Credentials): String
+
+    /**
+     * Puts registration request to the queue and returns UUID that will be used to identify request.
+     * @param classID Class ID to sync
+     * @param schoolsByCredentials Optional credentials to use during sync (if not provided, communicator will make an attempt to find sufficient credentials)
+     * @throws RateLimitException if rate limit for class is exceeded
+     */
+    fun addClassToSyncQueue(classID: ClassID, schoolsByCredentials: Credentials? = null): String
 }

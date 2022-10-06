@@ -13,11 +13,13 @@ import by.enrollie.impl.*
 import by.enrollie.plugins.configureKtorPlugins
 import by.enrollie.plugins.configureStartStopListener
 import by.enrollie.privateProviders.ApplicationMetadata
+import by.enrollie.privateProviders.CommandLineInterface
 import by.enrollie.privateProviders.EventSchedulerInterface
 import by.enrollie.privateProviders.TemplatingEngineInterface
 import by.enrollie.providers.*
 import by.enrollie.routes.registerAllRoutes
 import by.enrollie.util.StartupRoutine
+import by.enrollie.util.getBootstrapText
 import by.enrollie.util.getServices
 import com.neitex.SchoolsByParser
 import io.ktor.server.engine.*
@@ -37,7 +39,6 @@ import java.io.File
 import java.lang.module.ModuleFinder
 import java.util.*
 import kotlin.io.path.Path
-
 
 lateinit var APPLICATION_METADATA: ApplicationMetadata
 fun main() {
@@ -59,8 +60,8 @@ fun main() {
         } to selfProperties.getProperty("schoolsByParserVersion"))
     }
     APPLICATION_METADATA = metadata
-
     logger.info("Starting ${metadata.title} (built on: ${DateTime(metadata.buildTimestamp * 1000)})...")
+    println(getBootstrapText())
     val pluginsCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     val plugins = run { // Configure providers
         val layer = run { // Configure layer
@@ -96,7 +97,7 @@ fun main() {
         }
 
         val database = getServices<DatabaseProviderInterface>(layer).let {
-            require(it.size == 1) { "Exactly one database provider must be registered, however ${it.size} are found (IDs: ${it.map { it.databasePluginID }})" }
+            require(it.size == 1) { "Exactly one database provider must be registered, however ${it.size} are found (IDs: ${it.map { provider -> provider.databasePluginID }})" }
             it.first()
         }
         if (database.databasePluginID !in addedPlugins) {
@@ -104,7 +105,7 @@ fun main() {
         }
         logger.info("Using database: ${database.databasePluginID}")
         val configuration = getServices<ConfigurationInterface>(layer).let {
-            require(it.size == 1) { "Exactly one configuration provider must be registered, however ${it.size} are found (IDs: ${it.map { it.configurationPluginID }})" }
+            require(it.size == 1) { "Exactly one configuration provider must be registered, however ${it.size} are found (IDs: ${it.map { provider -> provider.configurationPluginID }})" }
             it.first()
         }
         if (configuration.configurationPluginID !in addedPlugins) {
@@ -120,13 +121,14 @@ fun main() {
         val dependencies = DI {
             bindSingleton { configuration }
             bindSingleton { database }
-            bindSingleton<DataRegistrarProviderInterface> { DataRegistrarImpl() }
+            bindSingleton<DataSourceCommunicatorInterface> { DataSourceCommunicatorImpl() }
             bindSingleton<CommandLineInterface> { CommandLine.instance }
             bindSingleton<AuthorizationInterface> { AuthorizationProviderImpl() }
             bindSingleton<PluginsProviderInterface> { PluginsProviderImpl(plugins) }
             bindSingleton<EventSchedulerInterface> { EventSchedulerImpl() }
             bindSingleton<SchoolsByMonitorInterface> { SchoolsByMonitorImpl() }
             bindSingleton<TemplatingEngineInterface> { TemplatingEngineImpl() }
+            bindSingleton<ExpiringFilesServerInterface> { ExpiringFilesServerImpl() }
         }
         @OptIn(UnsafeAPI::class) setProvidersCatalog(ProvidersCatalogImpl(dependencies))
         plugins
@@ -168,9 +170,4 @@ fun main() {
             registerAllRoutes()
         }
     }.start(true)
-    logger.info("Server is shut down, unloading plugins...")
-    plugins.forEach {
-        it.onUnload()
-    }
-    logger.info("Everything is unloaded. Goodbye and have a nice day! :)")
 }

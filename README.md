@@ -21,12 +21,24 @@ Server of Eversity Project. Uses [Schools.by](https://schools.by/) as main data 
 
 1. Clone the repository, CD into it and run `chmod +x gradlew && ./gradlew shadowJar`
 2. Copy newly created JAR from `build/libs` to any location you desire
-3. Get and set up any Eversity Database Provider you desire (there is a list of official providers down below)
+3. Get and set up any Eversity Database Provider you desire (there is a list of recommended providers down below)
 4. Get and set up any Eversity Configuration Provider you desire
 5. Run with `java -jar <path to JAR>`
 6. You should be able to access Eversity Server at `http://localhost:8080`
 7. Set up your reverse proxy to proxy Eversity Server and forbid any direct connection to Eversity Server from the
    internet
+
+## Recommended providers
+
+### Database providers
+
+- [enrollie/Eversity-XodusDB](https://github.com/enrollie/Eversity-XodusDB) - reference implementation of Eversity
+  Database. Uses Jetbrains Xodus as store
+
+### Configuration providers
+
+- [enrollie/Eversity-YAMLConfig](https://github.com/enrollie/Eversity-YAMLConfig) - reference implementation of
+  configuration provider. Stores configuration in a YAML file.
 
 # License
 

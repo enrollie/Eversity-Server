@@ -30,7 +30,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import java.time.LocalDateTime
 
-private fun Route.UsersGet() {
+private fun Route.usersGet() {
     authenticate("jwt") {
         get {
             val user =
@@ -64,7 +64,7 @@ internal data class ByRoleQuery(
 )
 
 @OptIn(UnsafeAPI::class)
-private fun Route.UsersByRoleGet() {
+private fun Route.usersByRoleGet() {
     authenticate("jwt") {
         get("/byRole") {
             val user =
@@ -73,19 +73,19 @@ private fun Route.UsersByRoleGet() {
             val query: ByRoleQuery = Json.decodeFromString(call.receiveText())
             val userIDs: List<UserID> = ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByType(
                 Roles.getRoleByID(query.roleID) ?: return@get call.respond(HttpStatusCode.BadRequest)
-            ).let {
+            ).let { rolesList ->
                 if (query.additionalData != null) {
-                    query.additionalData.getAsMap().toList().fold(it) { acc, (key, value) ->
+                    query.additionalData.getAsMap().toList().fold(rolesList) { acc, (key, value) ->
                         acc.filter { it.unsafeGetField(key) == value }
                     }
-                } else it
-            }.let {
+                } else rolesList
+            }.let { rolesList ->
                 if (query.validOn != null) {
-                    it.filter {
+                    rolesList.filter {
                         query.validOn.isAfter(it.roleGrantedDateTime) && (it.roleRevokedDateTime?.isAfter(query.validOn)
                             ?: true)
                     }
-                } else it
+                } else rolesList
             }.map { it.userID }.distinct()
             val users: List<User> =
                 if (userIDs.isEmpty()) emptyList() else ProvidersCatalog.databaseProvider.usersProvider.getUsers()
@@ -97,7 +97,7 @@ private fun Route.UsersByRoleGet() {
 
 internal fun Route.users() {
     route("/users") {
-        UsersGet()
-        UsersByRoleGet()
+        usersGet()
+        usersByRoleGet()
     }
 }

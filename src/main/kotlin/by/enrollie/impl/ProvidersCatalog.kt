@@ -9,6 +9,7 @@
 package by.enrollie.impl
 
 import by.enrollie.annotations.UnsafeAPI
+import by.enrollie.privateProviders.CommandLineInterface
 import by.enrollie.privateProviders.EventSchedulerInterface
 import by.enrollie.privateProviders.TemplatingEngineInterface
 import by.enrollie.providers.*
@@ -18,7 +19,7 @@ import org.kodein.di.instance
 
 interface ProvidersCatalogInterface {
     val databaseProvider: DatabaseProviderInterface
-    val registrarProvider: DataRegistrarProviderInterface
+    val registrarProvider: DataSourceCommunicatorInterface
     val configuration: ConfigurationInterface
     val commandLine: CommandLineInterface
     val authorization: AuthorizationInterface
@@ -26,11 +27,12 @@ interface ProvidersCatalogInterface {
     val eventScheduler: EventSchedulerInterface
     val schoolsByStatus: SchoolsByMonitorInterface
     val templatingEngine: TemplatingEngineInterface
+    val expiringFilesServer: ExpiringFilesServerInterface
 }
 
 class ProvidersCatalogImpl(override val di: DI) : ProvidersCatalogInterface, DIAware {
     override val databaseProvider: DatabaseProviderInterface by instance()
-    override val registrarProvider: DataRegistrarProviderInterface by instance()
+    override val registrarProvider: DataSourceCommunicatorInterface by instance()
     override val configuration: ConfigurationInterface by instance()
     override val commandLine: CommandLineInterface by instance()
     override val authorization: AuthorizationInterface by instance()
@@ -38,6 +40,7 @@ class ProvidersCatalogImpl(override val di: DI) : ProvidersCatalogInterface, DIA
     override val eventScheduler: EventSchedulerInterface by instance()
     override val schoolsByStatus: SchoolsByMonitorInterface by instance()
     override val templatingEngine: TemplatingEngineInterface by instance()
+    override val expiringFilesServer: ExpiringFilesServerInterface by instance()
 }
 
 private var providersCatalogField: ProvidersCatalogInterface? = null

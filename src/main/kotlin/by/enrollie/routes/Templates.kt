@@ -34,7 +34,7 @@ private data class TemplateFieldResponse(
 )
 
 @Serializable
-private data class TemplateResponse(
+private data class TemplateMetadataResponse(
     val templateID: String, val displayName: String, val fields: List<TemplateFieldResponse>
 )
 
@@ -45,12 +45,12 @@ internal fun Route.templates() {
             val roles = ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.userID)
             val availableTemplates = RoleUtil.determineAvailableTemplates(roles)
             val date = LocalDate.now()
-            val templates = availableTemplates.map {
-                TemplateResponse(it.templateID, it.displayName, it.fields.map {
+            val templates = availableTemplates.map { template ->
+                TemplateMetadataResponse(template.templateID, template.displayName, template.fields.map { field ->
                     TemplateFieldResponse(
-                        it.id, it.displayName, RoleUtil.suggestValues(roles, it, date).map {
+                        field.id, field.displayName, RoleUtil.suggestValues(roles, field, date).map {
                             TemplateFieldSuggestion(it.second, it.first)
-                        }, it.type
+                        }, field.type
                     )
                 })
             }

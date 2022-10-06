@@ -17,7 +17,10 @@ import by.enrollie.providers.ConfigurationInterface
 import by.enrollie.providers.DatabaseProviderInterface
 import by.enrollie.providers.PluginMetadataInterface
 import io.ktor.server.application.*
+import io.ktor.server.auth.*
 import io.ktor.server.engine.*
+import io.ktor.server.request.*
+import io.ktor.server.routing.*
 import org.slf4j.LoggerFactory
 
 object StartStopListenerPlugin {
@@ -56,10 +59,33 @@ internal fun Application.configureStartStopListener(plugins: List<PluginMetadata
             }
             override val eventScheduler: EventSchedulerInterface = ProvidersCatalog.eventScheduler
             override val templatingEngine: TemplatingEngineInterface = ProvidersCatalog.templatingEngine
+            override val commandLine: CommandLineInterface = ProvidersCatalog.commandLine
+            override val routing: RoutingInterface = object : RoutingInterface {
+                override fun createRoute(pluginMetadata: PluginMetadataInterface, routeHandler: Route.() -> Unit) {
+                    routing {
+                        route("/plugin/${pluginMetadata.name}") {
+                            authenticate("jwt") {
+                                routeHandler()
+                            }
+                        }
+                    }
+                }
+
+            }
         }
         plugins.forEach {
             logger.debug("Calling onStart() on ${it.name}")
             it.onStart(applicationProvider)
+        }
+    }
+    val pluginNamesMap = plugins.associateBy { it.name }
+    createApplicationPlugin("PluginHelper") {
+        onCallRespond { call ->
+            if (call.request.uri.startsWith("/plugin/")) {
+                val pluginName = call.request.uri.removeSuffix("/plugin/").substringBefore("/")
+                call.response.headers.append("X-Served-By",
+                    pluginNamesMap[pluginName]?.let { "${it.name}-${it.version}" } ?: "UnknownPlugin")
+            }
         }
     }
     environment.monitor.subscribe(ApplicationStopping) {

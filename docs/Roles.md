@@ -28,10 +28,10 @@ This role may be granted manually by any user that has role `CLASS.ClassTeacher`
 
 #### Defined additional information
 
-| ID            | Optional? | Description                          |
-|---------------|-----------|--------------------------------------|
-| `classID`     | `false`   | ID of class that role was granted in |
-| `delegatedBy` | `false`   | ID of user that granted given role.  |
+| ID            | Optional? | Description                                                                                                                                                                                                              |
+|---------------|-----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `classID`     | `false`   | ID of class that role was granted in                                                                                                                                                                                     |
+| `delegatedBy` | `false`   | ID of user that granted given role. _Note: This field is ignored by server if supplied by client since server assumes the user who appended role is the user who delegated this role. Client may not supply this value._ |
 
 #### Permissions granted to role
 
@@ -49,7 +49,6 @@ This role is granted automatically by server when student is added to class. Thi
 | ID          | Optional? | Description                                          |
 |-------------|-----------|------------------------------------------------------|
 | `classID`   | `false`   | ID of class that role was granted in                 |
-| `subgroups` | `true`    | List of subgroups IDs in which the student is listed |
 
 #### Permissions granted to role
 

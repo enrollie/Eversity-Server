@@ -30,25 +30,22 @@ object RoleUtil {
                 Roles.CLASS.ABSENCE_PROVIDER -> it.getField(Roles.CLASS.ABSENCE_PROVIDER.classID) == targetClass
                 else -> false
             }
-        } ?: rolesList.filter {
+        } ?: rolesList.firstOrNull {
             it.role == Roles.SCHOOL.ADMINISTRATION || it.role == Roles.SCHOOL.SOCIAL_TEACHER && (it.roleRevokedDateTime?.isAfter(
                 LocalDateTime.now()
             ) ?: true)
-        }.firstOrNull()
+        }
     }
 
     fun determineAvailableTemplates(rolesList: List<RoleData>): List<TemplatingEngineInterface.Template> {
         val roles = rolesList.map { it.role }.distinct()
-        return ProvidersCatalog.templatingEngine.availableTemplates.filter {
-            it.allowedRoles.any { it in roles }
+        return ProvidersCatalog.templatingEngine.availableTemplates.filter { template ->
+            template.allowedRoles.any { it in roles }
         }
     }
 
     @OptIn(UnsafeAPI::class)
-            /**
-             *
-             */
-    fun suggestValues( // TODO: Review it...
+    fun suggestValues( // I honestly just hope it works.
         roles: List<RoleData>, field: TemplatingEngineInterface.TemplateField, date: LocalDate
     ): List<Pair<String, String>> {
         return when (field.type) {
@@ -61,16 +58,16 @@ object RoleUtil {
             ).map { it.title to it.id.toString() }
 
             TemplatingEngineInterface.TemplateField.FieldType.USERID -> when (field.scope) {
-                TemplatingEngineInterface.TemplateField.FieldScope.CLASS -> roles.mapNotNull {
-                    it.getRoleInformationHolder()
+                TemplatingEngineInterface.TemplateField.FieldScope.CLASS -> roles.mapNotNull { roleData ->
+                    roleData.getRoleInformationHolder()
                         .getAsMap().entries.firstOrNull { it.key.id.endsWith("classID") }?.value as? ClassID
                 }.distinct().flatMap { classID ->
                     ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch {
                         (it.role == Roles.CLASS.STUDENT) && (it.getField(Roles.CLASS.STUDENT.classID) == classID) && (it.roleRevokedDateTime?.isAfter(
                             date.atStartOfDay()
                         ) ?: true) && (it.roleGrantedDateTime.isBefore(date.atStartOfDay()))
-                    }.map {
-                        ProvidersCatalog.databaseProvider.usersProvider.getUser(it.userID)!!
+                    }.map { roleData ->
+                        ProvidersCatalog.databaseProvider.usersProvider.getUser(roleData.userID)!!
                             .let { it.name.toString() to it.id.toString() }
                     }
                 }.distinct()
@@ -82,11 +79,11 @@ object RoleUtil {
                 }.distinct()
 
                 TemplatingEngineInterface.TemplateField.FieldScope.SCHOOL -> ProvidersCatalog.databaseProvider.usersProvider.getUsers()
-                    .let {
+                    .let { users ->
                         ProvidersCatalog.authorization.filterAllowed(
                             ProvidersCatalog.databaseProvider.usersProvider.getUser(
                                 roles.first().userID
-                            )!!, field.requiredPermission, it
+                            )!!, field.requiredPermission, users
                         ).map { it.name.toString() to it.id.toString() }
                     }
             }

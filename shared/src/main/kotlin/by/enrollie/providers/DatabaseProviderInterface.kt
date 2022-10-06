@@ -31,6 +31,24 @@ interface DatabaseProviderInterface {
     val lessonsProvider: DatabaseLessonsProviderInterface
     val absenceProvider: DatabaseAbsenceProviderInterface
     val customCredentialsProvider: DatabaseCustomCredentialsProviderInterface
+
+    /**
+     * If database supports such feature, will run the [block] in a context of a single transaction (for optimization purposes).
+     * If database does not support such feature, will run the [block] without any changes
+     * [block].database is the database itself
+     * @see [runInSingleTransactionAsync]
+     * @param block Code to run in a single transaction
+     */
+    fun <T> runInSingleTransaction(block: (database: DatabaseProviderInterface) -> T): T
+
+    /**
+     * If database supports such feature, will run [block] in a context of a single transaction (for optimization purposes).
+     * If database does not support such feature, will run [block] without any changes
+     * [block].database is the database itself
+     * @see [runInSingleTransaction]
+     * @param block Code to run in a single transaction
+     */
+    suspend fun <T> runInSingleTransactionAsync(block: suspend (database: DatabaseProviderInterface) -> T): T
 }
 
 interface Event<T> {
@@ -214,6 +232,12 @@ interface DatabaseClassesProviderInterface {
      * @throws IllegalArgumentException if [pupilsOrdering] is not a permutation of all pupils in class or if sorted values are not consecutive, or if values are not unique.
      */
     fun setPupilsOrdering(classID: ClassID, pupilsOrdering: List<Pair<UserID, Int>>)
+
+    /**
+     * Returns list of subgroups that are part of the class with [classID].
+     * @throws SchoolClassDoesNotExistException if class does not exist
+     */
+    fun getSubgroups(classID: ClassID): List<Subgroup>
 }
 
 interface DatabaseLessonsProviderInterface {
@@ -307,6 +331,34 @@ interface DatabaseLessonsProviderInterface {
      * Returns all lessons in database in given range
      */
     fun getLessons(datesRange: Pair<LocalDate, LocalDate>): List<Lesson>
+
+    /**
+     * Creates a subgroup for given [schoolClassID] with given [subgroupID] and [subgroupName]. Optionally, [members] can be specified.
+     */
+    fun createSubgroup(
+        subgroupID: SubgroupID, schoolClassID: ClassID, subgroupName: String, members: List<UserID>? = null
+    )
+
+    /**
+     * Creates a list of subgroups in an optimized manner.
+     */
+    fun createSubgroups(subgroupsList: List<Subgroup>)
+
+    /**
+     * Returns subgroup with [subgroupID] if it exists, null otherwise.
+     */
+    fun getSubgroup(subgroupID: SubgroupID): Subgroup?
+
+    /**
+     * Updates subgroup
+     */
+    fun <T : Any> updateSubgroup(subgroupID: SubgroupID, field: Field<T>, value: T)
+
+    /**
+     * Deletes subgroup with [subgroupID]
+     * @throws NoSuchElementException if subgroup does not exist
+     */
+    fun deleteSubgroup(subgroupID: SubgroupID)
 }
 
 interface DatabaseTimetablePlacingProviderInterface {

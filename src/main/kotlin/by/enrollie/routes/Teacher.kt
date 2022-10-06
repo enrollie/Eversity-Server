@@ -19,7 +19,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import java.time.LocalDate
 
-private fun Route.TeacherUserIdLessons() {
+private fun Route.teacherUserIdLessons() {
     get("/{userId}/lessons") {
         val user = call.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
         val targetUser = call.parameters["userId"]?.toIntOrNull()?.let {
@@ -43,7 +43,7 @@ private fun Route.TeacherUserIdLessons() {
 internal fun Route.teacher() {
     authenticate("jwt") {
         route("/teacher") {
-            TeacherUserIdLessons()
+            teacherUserIdLessons()
         }
     }
 }
