@@ -20,7 +20,7 @@ data class Name(
     val last: String
 ) {
     override fun toString(): String {
-        return "$first${middle?.let { " $it" } ?: ""} $last"
+        return "$last $first${middle?.let { " $it" } ?: ""}"
     }
 
     val shortForm = "$first ${middle ?: last}"

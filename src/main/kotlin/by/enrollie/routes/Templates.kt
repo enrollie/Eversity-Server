@@ -17,6 +17,7 @@ import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
@@ -35,7 +36,9 @@ private data class TemplateFieldResponse(
 
 @Serializable
 private data class TemplateMetadataResponse(
-    val templateID: String, val displayName: String, val fields: List<TemplateFieldResponse>
+    @SerialName("templateId")
+    val templateID: String,
+    val displayName: String, val fields: List<TemplateFieldResponse>
 )
 
 internal fun Route.templates() {

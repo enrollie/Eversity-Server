@@ -8,6 +8,7 @@
 
 package by.enrollie.routes
 
+import by.enrollie.data_classes.Roles
 import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.plugins.UserPrincipal
 import by.enrollie.privateProviders.TemplatingEngineInterface
@@ -41,28 +42,67 @@ internal fun Route.template() {
             val template =
                 ProvidersCatalog.templatingEngine.availableTemplates.firstOrNull { it.templateID == templateRequest.id }
                     ?: return@post call.respond(HttpStatusCode.NotFound)
-            template.fields.forEach { field -> // Validate fields
+            template.fields.forEach { field -> // Validate fields access
                 when (field.type) {
                     TemplatingEngineInterface.TemplateField.FieldType.DATE, TemplatingEngineInterface.TemplateField.FieldType.STRING -> {
+                        // There is no way to validate those
                     }
 
                     TemplatingEngineInterface.TemplateField.FieldType.CLASSID -> ProvidersCatalog.authorization.authorize(
                         user.getUserFromDB(),
                         field.requiredPermission,
-                        ProvidersCatalog.databaseProvider.classesProvider.getClass(templateRequest.fields[field.id]?.let {
-                            it.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest)
-                        } ?: return@post call.respond(HttpStatusCode.BadRequest)) ?: return@post call.respond(
+                        ProvidersCatalog.databaseProvider.classesProvider.getClass(
+                            templateRequest.fields[field.id]?.toIntOrNull() ?: return@post call.respond(
+                                HttpStatusCode.BadRequest
+                            )
+                        ) ?: return@post call.respond(
                             HttpStatusCode.NotFound
-                        ))
+                        )
+                    )
 
-                    TemplatingEngineInterface.TemplateField.FieldType.USERID -> ProvidersCatalog.authorization.authorize(
-                        user.getUserFromDB(),
-                        field.requiredPermission,
-                        ProvidersCatalog.databaseProvider.usersProvider.getUser(templateRequest.fields[field.id]?.let {
-                            it.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest)
-                        } ?: return@post call.respond(HttpStatusCode.BadRequest)) ?: return@post call.respond(
-                            HttpStatusCode.NotFound
-                        ))
+                    TemplatingEngineInterface.TemplateField.FieldType.USERID -> {
+                        when (field.scope) {
+                            TemplatingEngineInterface.TemplateField.FieldScope.CLASS -> {
+                                val target = ProvidersCatalog.databaseProvider.usersProvider.getUser(
+                                    templateRequest.fields[field.id]?.toIntOrNull() ?: return@post call.respond(
+                                        HttpStatusCode.BadRequest
+                                    )
+                                ) ?: return@post call.respond(HttpStatusCode.NotFound)
+                                ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch {
+                                    it.userID == target.id && Roles.CLASS.roleByID(it.role.getID()) != null
+                                }.any {
+                                    val classID = when (it.role) {
+                                        is Roles.CLASS.AbsenceProvider ->
+                                            it.getField(Roles.CLASS.ABSENCE_PROVIDER.classID)
+
+                                        is Roles.CLASS.ClassTeacher -> it.getField(Roles.CLASS.CLASS_TEACHER.classID)
+                                        is Roles.CLASS.Student -> it.getField(Roles.CLASS.STUDENT.classID)
+                                        is Roles.CLASS.Teacher -> it.getField(Roles.CLASS.TEACHER.classID)
+                                        else -> null
+                                    }
+                                        ?: throw IllegalStateException("Role ${it.role.getID()} doesn't have a `classID` property")
+                                    return@any runCatching {
+                                        ProvidersCatalog.authorization.authorize(
+                                            user.getUserFromDB(),
+                                            field.requiredPermission,
+                                            ProvidersCatalog.databaseProvider.classesProvider.getClass(classID)
+                                                ?: throw IllegalStateException("Class with ID $classID was not found in DB, although listed in role")
+                                        )
+                                    }.fold({ true }, { false })
+                                }
+                            }
+
+                            TemplatingEngineInterface.TemplateField.FieldScope.USER,
+                            TemplatingEngineInterface.TemplateField.FieldScope.SCHOOL -> {
+                                val target = ProvidersCatalog.databaseProvider.usersProvider.getUser(
+                                    templateRequest.fields[field.id]?.toIntOrNull() ?: return@post call.respond(
+                                        HttpStatusCode.BadRequest
+                                    )
+                                ) ?: return@post call.respond(HttpStatusCode.NotFound)
+                                ProvidersCatalog.authorization.authorize(user.getUserFromDB(), field.requiredPermission, target)
+                            }
+                        }
+                    }
                 }
             }
             val file = try {

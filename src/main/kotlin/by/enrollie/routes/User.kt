@@ -197,7 +197,7 @@ private fun Route.getUserRoles() {
 
                     Roles.SCHOOL.SOCIAL_TEACHER -> {
                         ProvidersCatalog.authorization.authorize(
-                            user, "edit_roles", AuthorizationProviderImpl.School()
+                            user, "edit_roles", AuthorizationProviderImpl.school
                         )
                         ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
                             id, DatabaseRolesProviderInterface.RoleCreationData(id, role, RoleInformationHolder())

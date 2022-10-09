@@ -39,7 +39,7 @@ private fun Route.absencesGet() {
     get {
         val user = call.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
         ProvidersCatalog.authorization.authorize(
-            user.getUserFromDB(), "read_all_absences", AuthorizationProviderImpl.School()
+            user.getUserFromDB(), "read_all_absences", AuthorizationProviderImpl.school
         )
         val date =
             call.request.queryParameters["date"]?.parseDate() ?: return@get call.respond(HttpStatusCode.BadRequest)
@@ -93,7 +93,7 @@ private fun Route.absencesSummaryGet() {
     get("/summary") {
         val user = call.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
         ProvidersCatalog.authorization.authorize(
-            user.getUserFromDB(), "read_statistics", AuthorizationProviderImpl.School()
+            user.getUserFromDB(), "read_statistics", AuthorizationProviderImpl.school
         )
         val startDate = call.request.queryParameters["startDate"]?.let {
             it.parseDate() ?: return@get call.respond(HttpStatusCode.BadRequest)

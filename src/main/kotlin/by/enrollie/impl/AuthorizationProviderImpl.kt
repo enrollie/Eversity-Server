@@ -16,7 +16,12 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 
 class AuthorizationProviderImpl : AuthorizationInterface {
-    class School
+    class School internal constructor()
+
+    companion object{
+        val school = School()
+    }
+
     class LessonsProvider {
         @Suppress("unused")
         fun getTodayLessons(user: User): List<Lesson> =
@@ -62,7 +67,7 @@ class AuthorizationProviderImpl : AuthorizationInterface {
     init {
         oso.registerClass(User::class.java, "User")
         oso.registerClass(School::class.java, "School")
-        oso.registerConstant(School(), "School")
+        oso.registerConstant(school, "School")
         oso.registerClass(SchoolClass::class.java, "SchoolClass")
         oso.registerClass(Lesson::class.java, "Lesson")
         oso.registerClass(Unit::class.java, "Unit")
