@@ -32,14 +32,14 @@ import java.time.LocalDateTime
 
 private fun Route.usersGet() {
     authenticate("jwt") {
-        get {
+        post {
             val user =
-                call.authentication.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
+                call.authentication.principal<UserPrincipal>() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val users: List<User> = try {
                 val userIDs: List<UserID> = Json.decodeFromString(call.receiveText())
                 ProvidersCatalog.databaseProvider.usersProvider.getUsers().filter { it.id in userIDs }.also {
                     if (it.size != userIDs.size) {
-                        return@get call.respond(HttpStatusCode.NotFound)
+                        return@post call.respond(HttpStatusCode.NotFound)
                     }
                 }
             } catch (e: SerializationException) {
@@ -48,10 +48,11 @@ private fun Route.usersGet() {
                 Sentry.addBreadcrumb(Breadcrumb.error("Exception besides SerializationException: ${e.message}"))
                 ProvidersCatalog.databaseProvider.usersProvider.getUsers()
             }
-            users.forEach {
-                ProvidersCatalog.authorization.authorize(user.getUserFromDB(), "read", it)
+            ProvidersCatalog.authorization.filterAllowed(user.getUserFromDB(), "read", users).also {
+                if (it.size != users.size)
+                    return@post call.respond(HttpStatusCode.Forbidden)
             }
-            return@get call.respond(users)
+            return@post call.respond(users)
         }
     }
 }
@@ -66,13 +67,13 @@ internal data class ByRoleQuery(
 @OptIn(UnsafeAPI::class)
 private fun Route.usersByRoleGet() {
     authenticate("jwt") {
-        get("/byRole") {
+        post("/byRole") {
             val user =
-                call.authentication.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
+                call.authentication.principal<UserPrincipal>() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             ProvidersCatalog.authorization.authorize(user.getUserFromDB(), "read_all_roles", Unit)
             val query: ByRoleQuery = Json.decodeFromString(call.receiveText())
             val userIDs: List<UserID> = ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByType(
-                Roles.getRoleByID(query.roleID) ?: return@get call.respond(HttpStatusCode.BadRequest)
+                Roles.getRoleByID(query.roleID) ?: return@post call.respond(HttpStatusCode.BadRequest)
             ).let { rolesList ->
                 if (query.additionalData != null) {
                     query.additionalData.getAsMap().toList().fold(rolesList) { acc, (key, value) ->

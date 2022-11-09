@@ -8,7 +8,6 @@
 
 package by.enrollie.plugins
 
-import by.enrollie.APPLICATION_METADATA
 import by.enrollie.annotations.UnsafeAPI
 import by.enrollie.data_classes.User
 import by.enrollie.impl.ProvidersCatalog
@@ -51,8 +50,14 @@ internal fun Application.configureStartStopListener(plugins: List<PluginMetadata
     })
     environment.monitor.subscribe(ApplicationStarted) {
         val applicationProvider = object : ApplicationProvider {
-            override val metadata: ApplicationMetadata = APPLICATION_METADATA
+            @Suppress("DEPRECATION")
+            override val metadata: ApplicationMetadata = object : ApplicationMetadata{
+                override val title: String = "Eversity Server"
+                override val version: String = ProvidersCatalog.environment.serverVersion
+                override val buildTimestamp: Long = ProvidersCatalog.environment.serverBuildTimestamp
+            }
             override val configuration: ConfigurationInterface = ProvidersCatalog.configuration
+            override val environment: EnvironmentInterface = ProvidersCatalog.environment
             override val database: DatabaseProviderInterface = ProvidersCatalog.databaseProvider
             override val tokenSigner: TokenSignerProvider = object : TokenSignerProvider {
                 override fun signToken(user: User, token: String): String = jwtProvider.signToken(user, token)

@@ -109,6 +109,7 @@ private fun Route.absencesSummaryGet() {
         }
         val (absences, dates) = if (startDate != null && endDate != null) {
             ProvidersCatalog.databaseProvider.absenceProvider.getAbsences(startDate to endDate)
+                .filterNot{ it.lessonsList.isEmpty() }
                 .fold(mutableMapOf<LocalDate, List<AbsenceRecord>>()) { acc, absenceRecord ->
                     acc[absenceRecord.absenceDate] = (acc[absenceRecord.absenceDate] ?: listOf()).plus(absenceRecord)
                     acc
@@ -117,6 +118,7 @@ private fun Route.absencesSummaryGet() {
             ).toList()
         } else {
             ProvidersCatalog.databaseProvider.absenceProvider.getAbsences(LocalDate.now())
+                .filterNot{ it.lessonsList.isEmpty() }
                 .fold(mutableMapOf<LocalDate, List<AbsenceRecord>>()) { acc, absenceRecord ->
                     acc[absenceRecord.absenceDate] = (acc[absenceRecord.absenceDate] ?: listOf()).plus(absenceRecord)
                     acc
@@ -155,10 +157,10 @@ private fun Route.absencesSummaryGet() {
                 it.first.map(SchoolClass::id) to it.second.map(SchoolClass::id)
             }
             val (firstShiftStudents, secondShiftStudents) = database.rolesProvider.getAllRolesByMatch {
-                it.role == Roles.CLASS.STUDENT && it.roleRevokedDateTime?.isBetweenOrEqual(
+                it.role == Roles.CLASS.STUDENT && !(it.roleRevokedDateTime?.isBetweenOrEqual(
                     startDate?.atStartOfDay() ?: LocalDateTime.now(),
                     endDate?.atStartOfDay() ?: LocalDateTime.now().plusDays(1)
-                ) == false
+                ) ?: false)
             }.partition {
                 it.getField(Roles.CLASS.STUDENT.classID) in firstShiftClasses
             }

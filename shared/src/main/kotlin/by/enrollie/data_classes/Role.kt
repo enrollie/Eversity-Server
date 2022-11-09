@@ -13,6 +13,7 @@ import by.enrollie.annotations.UnsafeAPI
 import by.enrollie.serializers.LocalDateTimeSerializer
 import by.enrollie.serializers.RoleInformationSerializer
 import by.enrollie.serializers.RoleSerializer
+import kotlinx.serialization.SerialName
 import java.time.LocalDateTime
 import kotlin.reflect.KType
 import kotlin.reflect.full.starProjectedType
@@ -182,7 +183,9 @@ class RoleInformationHolder(vararg information: Pair<Roles.Role.Field<*>, Any?>)
 
 @kotlinx.serialization.Serializable
 class RoleData(
+    @SerialName("uniqueId")
     val uniqueID: String,
+    @SerialName("userId")
     val userID: UserID,
     val role: Roles.Role,
     @kotlinx.serialization.Serializable(with = RoleInformationSerializer::class) private val additionalInformation: RoleInformationHolder,

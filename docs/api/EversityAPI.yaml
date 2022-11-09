@@ -40,7 +40,7 @@ paths:
       responses:
         '200':
           description: OK
-          headers: { }
+          headers: {}
           content:
             application/json:
               schema:
@@ -68,7 +68,7 @@ paths:
                 type: integer
               description: Suggested time in seconds in which client is advised to repeat the request
       description: 'If needed, registers and logs user in, returning user''s JWT auth token. Please, see [Logging in article](docs/logging-in.md).'
-      security: [ ]
+      security: []
       requestBody:
         content:
           application/json:
@@ -172,7 +172,7 @@ paths:
                   description: Must have all required fields in role
               required:
                 - role
-            examples: { }
+            examples: {}
         description: Consult with docs/roles.md for more info on user-created roles.
       tags:
         - User
@@ -223,32 +223,19 @@ paths:
                 items:
                   $ref: '#/components/schemas/User'
         '404':
-          description: One or more users from the body wasn't found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  notFound:
-                    type: array
-                    items:
-                      type: integer
+          description: One or more of users in query weren't found
       operationId: get-users
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: array
-              description: Array of user IDs to query
-              items:
-                type: integer
-        description: 'Body is not required. If body is omitted, all users will be returned.'
-      description: |-
-        Returns the list of all users (or only users specified in the body).
-
-        _Note:_ please, make the cache of the response and use it if needed user was already cached, as this request may take >500 ms to fulfill if many (or all) users are requested.
+      description: Returns the list of all users (or only users specified in the body).
+      parameters:
+        - schema:
+            type: array
+            uniqueItems: true
+          in: query
+          name: users
+          style: pipeDelimited
+          description: 'Array of users to query. If omitted, all users are returned.'
   /users/byRole:
-    get:
+    post:
       summary: Find users by their roles
       tags:
         - Users
@@ -261,7 +248,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/User'
-      operationId: get-users-byRole
+      operationId: post-users-byRole
       description: Queries all roles in database against query. Records that user does not have access to are filtered from the output.
       requestBody:
         content:
@@ -514,7 +501,7 @@ paths:
               description: WebSocket live status observation. See docs/Websocket-observation.md for more details.
         '409':
           description: Server does not have valid credentials to sync data with the data source. It is not known when user with applicable permissions will log in to update credentials.
-          headers: { }
+          headers: {}
         '429':
           description: 'Given class was already synced recently, so server rate-limited request. It is unknown, when that limit will be reset.'
         '503':
@@ -621,7 +608,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Absence'
-              examples: { }
+              examples: {}
       description: Creates new absence record. Requires `edit_absence` permission on target class.
       requestBody:
         content:
@@ -917,7 +904,7 @@ paths:
                       fields:
                         - id: date
                           displayName: Дата
-                          suggestedValues: [ ]
+                          suggestedValues: []
                           type: DATE
                 Class absence report:
                   value:
@@ -926,7 +913,7 @@ paths:
                       fields:
                         - id: date
                           displayName: Дата
-                          suggestedValues: [ ]
+                          suggestedValues: []
                           type: DATE
                         - id: classId
                           displayName: Класс
@@ -999,7 +986,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/TimetableCell'
       operationId: get-bellsTimetable
-      parameters: [ ]
+      parameters: []
       description: Returns timetable of school bells. Requires no permissions.
   /school:
     get:
@@ -1033,8 +1020,44 @@ paths:
                   schoolsBySubdomain:
                     type: string
       operationId: get-school
-      security: [ ]
+      security: []
       description: 'Returns information about school (it''s titles, Schools.by subdomain, etc.)'
+  /roles:
+    get:
+      summary: Get matching roles
+      tags: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '400':
+          description: One or more query params are invalid or role information key does not exist
+        '403':
+          description: User doesn't have enough permissions to read all roles
+      operationId: get-roles
+      description: ''
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: roleId
+          description: Role ID. See roles doc for more info
+          required: true
+        - schema:
+            type: string
+          in: query
+          name: validOn
+          description: Date and time on which role must valid
+        - schema:
+            type: string
+          in: query
+          name: <additional role information key>
+          description: Any other query param will be treated as Additional Role Information
 components:
   schemas:
     User:
@@ -1304,4 +1327,4 @@ components:
       type: http
       scheme: bearer
 security:
-  - JWT: [ ]
+  - JWT: []

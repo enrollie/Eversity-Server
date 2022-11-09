@@ -9,10 +9,12 @@
 package by.enrollie.routes
 
 import by.enrollie.data_classes.*
+import by.enrollie.extensions.isBetweenOrEqual
 import by.enrollie.impl.AuthorizationProviderImpl
 import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.plugins.UserPrincipal
 import by.enrollie.plugins.jwtProvider
+import by.enrollie.privateProviders.EnvironmentInterface
 import by.enrollie.providers.DatabaseRolesProviderInterface
 import com.neitex.AuthorizationUnsuccessful
 import com.neitex.SchoolsByParser
@@ -136,7 +138,7 @@ private fun Route.getUserByID() {
 @Serializable
 private data class UserRoleCreationRequest(val role: String, val additionalInfo: RoleInformationHolder)
 
-private fun Route.getUserRoles() {
+private fun Route.userRoles() {
     authenticate("jwt") {
         route("{id}/roles") {
             get {
@@ -155,6 +157,7 @@ private fun Route.getUserRoles() {
                 }
             }
             put {
+                val logger = LoggerFactory.getLogger("by.enrollie.Routes.User.putUserRole")
                 val user = call.authentication.principal<UserPrincipal>()?.getUserFromDB() ?: return@put call.respond(
                     HttpStatusCode.Unauthorized
                 )
@@ -166,10 +169,14 @@ private fun Route.getUserRoles() {
                 call.attributes.put(AttributeKey("targetUserID"), targetUser.id)
                 ProvidersCatalog.authorization.authorize(user, "edit_roles", targetUser)
                 val roleCreationRequest = call.receive<UserRoleCreationRequest>()
-                if (Roles.getRoleByID(roleCreationRequest.role) == null) {
+                val role = Roles.getRoleByID(roleCreationRequest.role)
+                if (role == null){
+                    if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT){
+                        logger.debug("Role ${roleCreationRequest.role} not found (call id: ${call.callId})")
+                    }
                     return@put call.respond(HttpStatusCode.BadRequest)
                 }
-                val createdRole = when (val role = Roles.getRoleByID(roleCreationRequest.role)!!) {
+                val createdRole = when (role) {
                     Roles.CLASS.ABSENCE_PROVIDER -> {
                         val classID =
                             roleCreationRequest.additionalInfo[Roles.CLASS.ABSENCE_PROVIDER.classID] as? ClassID
@@ -185,6 +192,15 @@ private fun Route.getUserRoles() {
                                 HttpStatusCode.BadRequest
                             )
                         )
+                        val existingRole = ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(id).find {
+                            it.role == role && LocalDateTime.now().isBetweenOrEqual(it.roleGrantedDateTime, it.roleRevokedDateTime ?: LocalDateTime.MAX)
+                        }
+                        if (existingRole != null) {
+                            if(ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT){
+                                logger.debug("Role ${roleCreationRequest.role} already exists: $existingRole (call id: ${call.callId})")
+                            }
+                            return@put call.respond(existingRole)
+                        }
                         ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
                             id, DatabaseRolesProviderInterface.RoleCreationData(
                                 id, role, RoleInformationHolder(
@@ -199,6 +215,15 @@ private fun Route.getUserRoles() {
                         ProvidersCatalog.authorization.authorize(
                             user, "edit_roles", AuthorizationProviderImpl.school
                         )
+                        val existingRole = ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(id).find {
+                            it.role == role && LocalDateTime.now().isBetweenOrEqual(it.roleGrantedDateTime, it.roleRevokedDateTime ?: LocalDateTime.MAX)
+                        }
+                        if (existingRole != null) {
+                            if(ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT){
+                                logger.debug("Role ${roleCreationRequest.role} already exists: $existingRole (call id: ${call.callId})")
+                            }
+                            return@put call.respond(existingRole)
+                        }
                         ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
                             id, DatabaseRolesProviderInterface.RoleCreationData(id, role, RoleInformationHolder())
                         )
@@ -272,7 +297,7 @@ internal fun Route.user() {
     route("/user") {
         login()
         getUserByID()
-        getUserRoles()
+        userRoles()
         userToken()
         getCurrUser()
     }

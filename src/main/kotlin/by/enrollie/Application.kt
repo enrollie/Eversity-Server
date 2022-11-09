@@ -12,13 +12,11 @@ import by.enrollie.annotations.UnsafeAPI
 import by.enrollie.impl.*
 import by.enrollie.plugins.configureKtorPlugins
 import by.enrollie.plugins.configureStartStopListener
-import by.enrollie.privateProviders.ApplicationMetadata
-import by.enrollie.privateProviders.CommandLineInterface
-import by.enrollie.privateProviders.EventSchedulerInterface
-import by.enrollie.privateProviders.TemplatingEngineInterface
+import by.enrollie.privateProviders.*
 import by.enrollie.providers.*
 import by.enrollie.routes.registerAllRoutes
 import by.enrollie.util.StartupRoutine
+import by.enrollie.util.generateServerName
 import by.enrollie.util.getBootstrapText
 import by.enrollie.util.getServices
 import com.neitex.SchoolsByParser
@@ -27,24 +25,26 @@ import io.ktor.server.netty.*
 import io.ktor.server.routing.*
 import io.sentry.Sentry
 import io.sentry.SentryOptions
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import org.joda.time.DateTime
 import org.kodein.di.DI
 import org.kodein.di.bindSingleton
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.lang.module.ModuleFinder
+import java.net.InetAddress
 import java.util.*
 import kotlin.io.path.Path
 
-lateinit var APPLICATION_METADATA: ApplicationMetadata
 fun main() {
     val logger = LoggerFactory.getLogger("BOOTSTRAP")
-    val environment = System.getenv()["EVERSITY_ENV"] ?: "prod"
-    require(environment == "prod" || environment == "dev") { "Environment must be either 'prod' or 'dev'" }
+    val environment = when (System.getenv()["EVERSITY_ENV"]?.lowercase()) {
+        "prod" -> EnvironmentInterface.EnvironmentType.PRODUCTION
+        "dev" -> EnvironmentInterface.EnvironmentType.DEVELOPMENT
+        "test" -> EnvironmentInterface.EnvironmentType.TESTING
+        null -> EnvironmentInterface.EnvironmentType.DEVELOPMENT
+        else -> throw IllegalArgumentException("Unknown environment type: ${System.getenv()["EVERSITY_ENV"]}")
+    }
     logger.info("Starting application in \'$environment\' environment...")
     val (metadata, schoolsByParserVersion) = run {
         val selfProperties =
@@ -53,17 +53,22 @@ fun main() {
                     load(it)
                 }
             } ?: Properties()
-        (object : ApplicationMetadata {
-            override val title: String = "Eversity Server v${selfProperties.getProperty("version", "0.1.0")}"
-            override val version: String = selfProperties.getProperty("version", "0.1.0")
-            override val buildTimestamp: Long = selfProperties.getProperty("buildTimestamp", "0").toLong()
+        (object : EnvironmentInterface {
+            override val environmentType: EnvironmentInterface.EnvironmentType = environment
+            override val systemName: String = InetAddress.getLocalHost().hostName ?: System.getProperty("os.name")
+            override val serverName: String = System.getenv()["EVERSITY_SERVER_NAME"] ?: generateServerName()
+            override val startTime: Long = DateTime.now().millis
+            override val serverVersion: String = selfProperties.getProperty("version", "unknown")
+            override val serverApiVersion: String = selfProperties.getProperty("apiVersion", "unknown")
+            override val serverBuildTimestamp: Long = selfProperties.getProperty("buildTimestamp", "0").toLong()
+            override val serverBuildID: String = selfProperties.getProperty("buildID", "unknown")
+            override val environmentVariables: Map<String, String> = System.getenv()
         } to selfProperties.getProperty("schoolsByParserVersion"))
     }
-    APPLICATION_METADATA = metadata
-    logger.info("Starting ${metadata.title} (built on: ${DateTime(metadata.buildTimestamp * 1000)})...")
-    println(getBootstrapText())
+    logger.info("Starting Eversity Server (built on: ${DateTime(metadata.serverBuildTimestamp * 1000)}) on ${metadata.systemName} (server name: ${metadata.serverName})...")
+    println(getBootstrapText(metadata))
     val pluginsCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    val plugins = run { // Configure providers
+    val plugins = runBlocking { // Configure providers
         val layer = run { // Configure layer
             File("plugins").mkdir()
             val pluginsFinder = ModuleFinder.of(Path("plugins"))
@@ -78,21 +83,26 @@ fun main() {
         if (loadAnyVersion) {
             logger.warn("EVERSITY_LOAD_EVERY_PLUGIN is set to true. All plugins will be loaded regardless of API version they were built against.")
         }
-        plugins.forEach {
-            pluginsCoroutineScope.launch {
+        plugins.map {
+            pluginsCoroutineScope.async {
                 if (it.name in addedPlugins) {
                     throw IllegalStateException("Found another plugin with the same title: ${it.name} (its version is ${it.version})")
                 }
-                if (it.pluginApiVersion != APPLICATION_METADATA.version && !loadAnyVersion) {
-                    logger.error("Plugin ${it.name} (version ${it.version}) was built for plugin API version ${it.pluginApiVersion}, but this server is running version ${APPLICATION_METADATA.version}. This plugin won't be loaded.")
-                    return@launch
-                } else if (it.pluginApiVersion != APPLICATION_METADATA.version && loadAnyVersion) {
-                    logger.warn("Plugin ${it.name} (version ${it.version}) was built for plugin API version ${it.pluginApiVersion}, but this server is running version ${APPLICATION_METADATA.version}. This plugin will be loaded, but it might not work as expected.")
+                if (it.pluginApiVersion != metadata.serverApiVersion && !loadAnyVersion) {
+                    logger.error("Plugin ${it.name} (version ${it.version}) was built for plugin API version ${it.pluginApiVersion}, but this server implements version ${metadata.serverApiVersion}. This plugin won't be loaded.")
+                    return@async
+                } else if (it.pluginApiVersion != metadata.serverApiVersion && loadAnyVersion) {
+                    logger.warn("Plugin ${it.name} (version ${it.version}) was built for plugin API version ${it.pluginApiVersion}, but this server implements version ${metadata.serverApiVersion}. This plugin will be loaded, but it might not work as expected.")
                 }
                 logger.info("Loading plugin ${it.name} v${it.version} (author: ${it.author})")
                 it.onLoad()
                 logger.info("Loaded plugin ${it.name} v${it.version}")
                 addedPlugins += it.name
+            }
+        }.also {
+            val list = awaitAll(*it.toTypedArray())
+            if (list.size != it.size) {
+                throw IllegalStateException("Some plugins failed to load, stopping server...")
             }
         }
 
@@ -129,6 +139,7 @@ fun main() {
             bindSingleton<SchoolsByMonitorInterface> { SchoolsByMonitorImpl() }
             bindSingleton<TemplatingEngineInterface> { TemplatingEngineImpl() }
             bindSingleton<ExpiringFilesServerInterface> { ExpiringFilesServerImpl() }
+            bindSingleton<EnvironmentInterface> { metadata }
         }
         @OptIn(UnsafeAPI::class) setProvidersCatalog(ProvidersCatalogImpl(dependencies))
         plugins
@@ -141,7 +152,8 @@ fun main() {
     System.getenv()["SENTRY_DSN"]?.let {
         Sentry.init(SentryOptions().apply {
             dsn = it
-            tracesSampleRate = if (environment == "prod") 0.8 else 1.0
+            tracesSampleRate =
+                if (metadata.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT || metadata.environmentType == EnvironmentInterface.EnvironmentType.TESTING) 0.8 else 1.0
             isPrintUncaughtStackTrace = true
             if (System.getenv()["EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY"]?.toBooleanStrictOrNull() == true) {
                 logger.warn("EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY is set to true. All exceptions will be logged, but not sent to Sentry.")
@@ -153,8 +165,9 @@ fun main() {
     Sentry.configureScope {
         it.setTag("schools-by-subdomain", SchoolsByParser.schoolSubdomain)
         it.setTag("schools-by-parser-version", schoolsByParserVersion)
-        it.setTag("version", metadata.version)
-        it.setTag("environment", environment)
+        it.setTag("version", metadata.serverVersion)
+        it.setTag("environment", metadata.environmentType.name)
+        it.setTag("server-api-version", metadata.serverApiVersion)
     }
     if (System.getenv()["EVERSITY_STRESS_TEST_MODE"]?.toBooleanStrictOrNull() == true) {
         logger.warn("EVERSITY_STRESS_TEST_MODE is set to true. This server will be running in stress test mode. Communications with outside services using user-supplied data will be minimized. (though, some plugins may not respect this mode)")

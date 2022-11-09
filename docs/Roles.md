@@ -80,9 +80,10 @@ This role is granted automatically by server when teacher is added to a class. T
 
 #### Defined additional information
 
-| ID          | Optional? | Description                               |
-|-------------|-----------|-------------------------------------------|
-| `classID`   | `false`   | ID of class that role was granted in      |
+| ID          | Optional? | Description                                  |
+|-------------|-----------|----------------------------------------------|
+| `classID`   | `false`   | ID of class that role was granted in         |
+| `journalID` | `false`   | ID of a journal that this teacher is tied to |
 
 ### `SCHOOL.Administration`
 

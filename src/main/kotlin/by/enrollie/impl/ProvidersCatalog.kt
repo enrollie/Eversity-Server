@@ -10,6 +10,7 @@ package by.enrollie.impl
 
 import by.enrollie.annotations.UnsafeAPI
 import by.enrollie.privateProviders.CommandLineInterface
+import by.enrollie.privateProviders.EnvironmentInterface
 import by.enrollie.privateProviders.EventSchedulerInterface
 import by.enrollie.privateProviders.TemplatingEngineInterface
 import by.enrollie.providers.*
@@ -28,6 +29,7 @@ interface ProvidersCatalogInterface {
     val schoolsByStatus: SchoolsByMonitorInterface
     val templatingEngine: TemplatingEngineInterface
     val expiringFilesServer: ExpiringFilesServerInterface
+    val environment: EnvironmentInterface
 }
 
 class ProvidersCatalogImpl(override val di: DI) : ProvidersCatalogInterface, DIAware {
@@ -41,6 +43,7 @@ class ProvidersCatalogImpl(override val di: DI) : ProvidersCatalogInterface, DIA
     override val schoolsByStatus: SchoolsByMonitorInterface by instance()
     override val templatingEngine: TemplatingEngineInterface by instance()
     override val expiringFilesServer: ExpiringFilesServerInterface by instance()
+    override val environment: EnvironmentInterface by instance()
 }
 
 private var providersCatalogField: ProvidersCatalogInterface? = null

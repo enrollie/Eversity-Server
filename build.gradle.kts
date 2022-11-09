@@ -79,6 +79,8 @@ dependencies {
 
 
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktorVersion")
+    testImplementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
+    testImplementation("io.ktor:ktor-server-test-host:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
 }
 
@@ -90,6 +92,8 @@ compileKotlin.dependsOn.add((tasks.getByName("processResources") as ProcessResou
         props["version"] = semver.info.toString()
         props["schoolsByParserVersion"] = schoolsByParserVersion
         props["buildTimestamp"] = (System.currentTimeMillis() / 1000).toString()
+        props["buildID"] = semver.info.count.toString()
+        props["apiVersion"] = project.childProjects.toList().first().second.version.toString()
         expand(props)
     }
 })
@@ -99,10 +103,6 @@ tasks.processResources {
 }
 tasks.register("cleanResources") {
     delete("$buildDir/resources")
-    didWork = true
-}
-tasks.register("getVersion") {
-    println("Current version: ${semver.info}")
     didWork = true
 }
 

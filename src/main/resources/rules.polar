@@ -91,6 +91,10 @@ allow(user: User, "read_all_roles", _: Unit) if
     role in RolesProvider.roles(user) and
     role.getRole().getID().startsWith("SCHOOL"); # Users with any school-wide role can read all roles
 
+allow(user: User, "read_all_roles", _: School) if
+    role in RolesProvider.roles(user) and
+    role.getRole().getID().startsWith("SCHOOL"); # Users with any school-wide role can read all users
+
 allow(_: User, "read", _: User);
 allow(user: User, "edit_roles", target: User) if
     has_permission(user, "edit_roles", target);

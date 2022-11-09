@@ -24,5 +24,6 @@ fun Route.registerAllRoutes() {
     bellsTimetable()
     getSchool()
     teacher()
+    roles()
     route("/temp/file") { ProvidersCatalog.expiringFilesServer.registerInRoute(this) }
 }

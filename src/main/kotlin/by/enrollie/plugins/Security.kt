@@ -11,6 +11,7 @@ package by.enrollie.plugins
 import by.enrollie.data_classes.User
 import by.enrollie.data_classes.UserID
 import by.enrollie.impl.ProvidersCatalog
+import by.enrollie.privateProviders.EnvironmentInterface
 import com.auth0.jwt.JWT
 import com.auth0.jwt.JWTVerifier
 import com.auth0.jwt.algorithms.Algorithm
@@ -57,7 +58,18 @@ internal fun Application.configureSecurity() {
             validate { credential ->
                 val token = credential.payload.getClaim("token").asString()
                 val userId = credential.payload.getClaim("user").asInt()
-                if (ProvidersCatalog.databaseProvider.authenticationDataProvider.checkToken(token, userId)) {
+                if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.TESTING){
+                    println("User ID: $userId")
+                    println("Token: $token")
+                }
+                if (ProvidersCatalog.databaseProvider.authenticationDataProvider.checkToken(
+                        token,
+                        userId
+                    ) || ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.TESTING
+                ) {
+                    if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.TESTING) {
+                        application.log.debug("Token is considered valid since server is running in testing mode")
+                    }
                     attributes.put(AttributeKey("userID"), userId)
                     attributes.put(AttributeKey("token"), token)
                     UserPrincipal(userId, token)

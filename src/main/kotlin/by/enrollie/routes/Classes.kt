@@ -19,7 +19,7 @@ import io.ktor.server.routing.*
 
 private fun Route.ClassesGet() {
     get {
-        val user = call.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
+        call.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
         val classes = ProvidersCatalog.databaseProvider.classesProvider.getClasses()
         val filter = call.request.queryParameters["shift"]?.runCatching {
             TeachingShift.valueOf(this)

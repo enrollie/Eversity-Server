@@ -15,24 +15,42 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-class LocalDateTimeSerializer : KSerializer<LocalDateTime> {
-    private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd\'T\'HH:mm:ssXXX")
-    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LocalDateTime", PrimitiveKind.STRING)
 
-    override fun deserialize(decoder: Decoder): LocalDateTime {
-        return try {
-            ZonedDateTime.parse(decoder.decodeString(), formatter).toLocalDateTime()
-        } catch (e: Exception) {
-            throw SerializationException(e.message)
+class LocalDateTimeSerializer : KSerializer<LocalDateTime> {
+    companion object {
+        val defaultFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd\'T\'HH:mm:ssXXX")
+
+        /**
+         * @throws SerializationException if the string is not in the expected format.
+         */
+        fun parse(string: String): LocalDateTime {
+            val defParseResult = kotlin.runCatching {
+                LocalDateTime.parse(string, defaultFormatter)
+            }
+            if (defParseResult.isSuccess) return defParseResult.getOrThrow()
+            val jsParseResult = kotlin.runCatching {
+                val temporalAccessor = DateTimeFormatter.ISO_INSTANT.parse(string.replaceAfterLast(".", "").replace('.', 'Z'))
+                val instant = Instant.from(temporalAccessor)
+                LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+            }
+            if (jsParseResult.isSuccess) return jsParseResult.getOrThrow()
+            throw SerializationException("Can't parse date")
         }
     }
 
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LocalDateTime", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): LocalDateTime {
+        val string = decoder.decodeString()
+        return parse(string)
+    }
+
     override fun serialize(encoder: Encoder, value: LocalDateTime) {
-        encoder.encodeString(value.atZone(ZoneId.systemDefault()).format(formatter))
+        encoder.encodeString(value.atZone(ZoneId.systemDefault()).format(defaultFormatter))
     }
 }

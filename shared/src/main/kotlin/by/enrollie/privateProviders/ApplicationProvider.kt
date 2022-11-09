@@ -12,8 +12,10 @@ import by.enrollie.providers.ConfigurationInterface
 import by.enrollie.providers.DatabaseProviderInterface
 
 interface ApplicationProvider {
+    @Suppress("DEPRECATION")
     val metadata: ApplicationMetadata
     val configuration: ConfigurationInterface
+    val environment: EnvironmentInterface
     val database: DatabaseProviderInterface
     val tokenSigner: TokenSignerProvider
     val eventScheduler: EventSchedulerInterface

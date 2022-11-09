@@ -8,6 +8,11 @@
 
 package by.enrollie.privateProviders
 
+@Deprecated(
+    "Use EnvironmentInterface instead",
+    ReplaceWith("EnvironmentInterface", "by.enrollie.privateProviders.EnvironmentInterface"),
+    DeprecationLevel.WARNING
+)
 interface ApplicationMetadata {
     val title: String
     val version: String

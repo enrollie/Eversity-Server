@@ -21,7 +21,7 @@ data class Lesson(
     @kotlinx.serialization.Serializable(with = LocalDateSerializer::class)
     val date: LocalDate,
     val placeInTimetable: TimetablePlace,
-    val teachers: UserID,
+    val teacher: UserID,
     val classID: ClassID,
     val journalID: JournalID,
     val subgroupID: SubgroupID?
