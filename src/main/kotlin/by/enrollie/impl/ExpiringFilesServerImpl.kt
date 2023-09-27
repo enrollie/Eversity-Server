@@ -8,6 +8,7 @@
 
 package by.enrollie.impl
 
+import by.enrollie.privateProviders.EventSchedulerInterface
 import by.enrollie.providers.ExpiringFilesServerInterface
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -18,7 +19,7 @@ import java.io.File
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
-class ExpiringFilesServerImpl : ExpiringFilesServerInterface {
+class ExpiringFilesServerImpl(private val scheduler: EventSchedulerInterface) : ExpiringFilesServerInterface {
     private val filesMap = ConcurrentHashMap<String, File>(10)
     private val logger = LoggerFactory.getLogger("ExpiringFilesServer")
 
@@ -26,7 +27,7 @@ class ExpiringFilesServerImpl : ExpiringFilesServerInterface {
         val id = "${file.hashCode()}-${UUID.randomUUID()}.${file.extension}"
         filesMap[id] = file
         if (expireIn != null) {
-            ProvidersCatalog.eventScheduler.scheduleOnce(expireIn) {
+            scheduler.scheduleOnce(expireIn) {
                 filesMap.remove(id)?.also {
                     it.delete()
                     logger.debug("Removed file $id (path: ${it.path}) due to a timeout")

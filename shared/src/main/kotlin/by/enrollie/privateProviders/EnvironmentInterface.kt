@@ -10,7 +10,12 @@ package by.enrollie.privateProviders
 
 interface EnvironmentInterface {
     enum class EnvironmentType(val shortName: String, val fullName: String) {
-        DEVELOPMENT("DEV", "DEVELOPMENT"), PRODUCTION("PROD", "PRODUCTION"), TESTING("TEST", "TESTING")
+        DEVELOPMENT("DEV", "DEVELOPMENT"), PRODUCTION("PROD", "PRODUCTION"), TESTING("TEST", "TESTING");
+
+        /**
+         * Returns whether logging should be verbose or not in given environment.
+         */
+        fun verboseLogging() = this == DEVELOPMENT || this == TESTING
     }
 
     /**

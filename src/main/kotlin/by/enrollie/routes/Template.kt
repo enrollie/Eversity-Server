@@ -9,6 +9,7 @@
 package by.enrollie.routes
 
 import by.enrollie.data_classes.Roles
+import by.enrollie.exceptions.BadArgumentException
 import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.plugins.UserPrincipal
 import by.enrollie.privateProviders.TemplatingEngineInterface
@@ -20,18 +21,24 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.time.Duration
 
-@kotlinx.serialization.Serializable
+@Serializable
 private data class TemplateRequest(
     val id: String, val fields: Map<String, String>
 )
 
-@kotlinx.serialization.Serializable
+@Serializable
 private data class FilledTemplateResponse(
     val filename: String, val mime: String, val url: String, val expiresIn: Long
+)
+
+@Serializable
+private data class TemplateGenerationError(
+    val error: String
 )
 
 internal fun Route.template() {
@@ -99,7 +106,11 @@ internal fun Route.template() {
                                         HttpStatusCode.BadRequest
                                     )
                                 ) ?: return@post call.respond(HttpStatusCode.NotFound)
-                                ProvidersCatalog.authorization.authorize(user.getUserFromDB(), field.requiredPermission, target)
+                                ProvidersCatalog.authorization.authorize(
+                                    user.getUserFromDB(),
+                                    field.requiredPermission,
+                                    target
+                                )
                             }
                         }
                     }
@@ -109,7 +120,16 @@ internal fun Route.template() {
                 ProvidersCatalog.templatingEngine.renderTemplate(templateRequest.id, templateRequest.fields)
             } catch (e: IllegalArgumentException) {
                 LoggerFactory.getLogger("TemplateRouter").error("Template input error", e)
-                return@post call.respond(HttpStatusCode.BadRequest)
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    TemplateGenerationError("Какое-то поле было заполнено неверно или не было заполнено вовсе")
+                )
+            } catch (e: BadArgumentException) {
+                LoggerFactory.getLogger("TemplateRouter").error("Template input error", e)
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    TemplateGenerationError("Генератор шаблона вернул ошибку: ${e.message}")
+                )
             }
             val mime = withContext(Dispatchers.IO) {
                 Files.probeContentType(file.toPath())

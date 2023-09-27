@@ -15,7 +15,7 @@ import by.enrollie.privateProviders.ApplicationProvider
  */
 interface PluginMetadataInterface {
     /**
-     * @return name of the plugin, which is also its id.
+     * @return name of the plugin, which is also its id. Must only contain letters, numbers, underscores and dashes.
      */
     val name: String
 
@@ -30,7 +30,7 @@ interface PluginMetadataInterface {
     val author: String
 
     /**
-     * @return version of plugin API that this plugin was built for.
+     * @return version of plugin API that this plugin was built for. Must be full (i.e. "1.0.0", not "1.0") without "v" prefix.
      */
     val pluginApiVersion: String
 

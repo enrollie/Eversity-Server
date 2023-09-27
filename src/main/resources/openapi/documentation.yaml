@@ -1,0 +1,1343 @@
+openapi: "3.0.3"
+info:
+  title: Eversity API
+  version: '1.0'
+  description: API of Eversity Server
+  license:
+    name: AGPLv3
+  contact:
+    name: Enrollie Github Organization
+    url: 'https://github.com/enrollie'
+servers:
+  - url: 'http://localhost:8080'
+    description: Your local machine
+tags:
+  - name: User
+    description: Single user operations
+  - name: Users
+    description: Multiple user operations
+  - name: Class
+    description: Operations on a single class
+  - name: Classes
+    description: Operations on multiple classes
+  - name: Absence
+    description: Operations of creating and editing absences
+  - name: Absences
+    description: Operations of getting and analyzing absences
+  - name: Lessons
+    description: Operations of getting lessons
+  - name: Templating
+    description: Operations related to templating engine
+  - name: Timetable
+    description: Operations related to school timetables
+  - name: School
+    description: Operations related to school entity
+paths:
+  /user/login:
+    post:
+      summary: Login user
+      operationId: post-user-login
+      responses:
+        '200':
+          description: OK
+          headers: {}
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: integer
+                  token:
+                    type: string
+                    description: JWT auth token
+        '202':
+          description: 'User is not registered and server has begun registering user. See [Live registration description](docs/Live-registration.md).'
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Location of WebSocket endpoint that broadcasts given user registration process.
+        '401':
+          description: Schools.by rejected user's credentials
+        '503':
+          description: Schools.by is unavailable at the moment
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Suggested time in seconds in which client is advised to repeat the request
+      description: 'If needed, registers and logs user in, returning user''s JWT auth token. Please, see [Logging in article](docs/logging-in.md).'
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+        description: Schools.by login data
+      tags:
+        - User
+  /user/token:
+    delete:
+      summary: Revoke used auth token
+      responses:
+        '200':
+          description: Used token(s) is/are revoked and cannot be used later
+      operationId: delete-user-token
+      description: 'Revokes used token (or all tokens, if specified)'
+      parameters:
+        - schema:
+            type: boolean
+          in: query
+          name: all
+          description: 'Defines, whether to revoke all existing tokens or just the used one. Set to `true` to revoke all user tokens.'
+      tags:
+        - User
+  '/user/{userId}':
+    parameters:
+      - schema:
+          type: integer
+        name: userId
+        in: path
+        required: true
+        description: User ID
+    get:
+      summary: Get user info
+      tags:
+        - User
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+      operationId: get-user-userId
+      description: Returns user with given ID
+  '/user/{userId}/roles':
+    parameters:
+      - schema:
+          type: integer
+        name: userId
+        in: path
+        required: true
+        description: User ID
+    get:
+      summary: Get user roles
+      tags:
+        - User
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+      operationId: get-user-userId-roles
+      description: Returns list of roles for given user. Requires `read_roles` permission on target user.
+    put:
+      summary: Create role
+      operationId: put-user-userId-roles
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          description: Required fields are missing or irrelevant fields are present
+        '403':
+          description: User is forbidden from creating requested role.
+        '404':
+          description: Target user was not found
+      description: Creates role and assigns it to user. Requires different permissions for each role type (and additional information field). Requires `edit_roles` permission on a target user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  $ref: '#/components/schemas/RoleID'
+                additionalInfo:
+                  type: object
+                  description: Must have all required fields in role
+              required:
+                - role
+            examples: {}
+        description: Consult with docs/roles.md for more info on user-created roles.
+      tags:
+        - User
+    delete:
+      summary: Revoke user role
+      operationId: delete-user-userId-roles
+      responses:
+        '200':
+          description: OK
+      description: 'Revokes role from user. Actor user must have `edit_roles` permission on target user with '
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                uniqueId:
+                  type: string
+                  description: Role unique ID
+      tags:
+        - User
+  /user:
+    get:
+      summary: Get authenticated user
+      tags:
+        - User
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+      operationId: get-user
+      description: Returns user whose token that request was authenticated with.
+  /users:
+    get:
+      summary: Get all users
+      tags:
+        - Users
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '404':
+          description: One or more of users in query weren't found
+      operationId: get-users
+      description: Returns the list of all users (or only users specified in the body).
+      parameters:
+        - schema:
+            type: array
+            items:
+                type: integer
+            uniqueItems: true
+          in: query
+          name: users
+          style: pipeDelimited
+          description: 'Array of users to query. If omitted, all users are returned.'
+  /users/byRole:
+    post:
+      summary: Find users by their roles
+      tags:
+        - Users
+      responses:
+        '200':
+          description: List of all users with matching roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+      operationId: post-users-byRole
+      description: Queries all roles in database against query. Records that user does not have access to are filtered from the output.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roleId:
+                  type: string
+                additionalData:
+                  type: object
+                  description: Custom map of data for roles to be queried against
+                validOn:
+                  type: string
+                  description: 'Date and time, on which needed roles must had been valid on. If not set, all roles matching previous query will be returned, even if those roles are not valid at the request moment'
+                  pattern: '^(?:\d{4})-(?:\d{2})-(?:\d{2})T(?:\d{2}):(?:\d{2}):(?:\d{2}?)(?:[+-]\d{2}:\d{2})$'
+              required:
+                - roleId
+        description: Query
+  '/class/{classId}':
+    parameters:
+      - schema:
+          type: integer
+        name: classId
+        in: path
+        required: true
+        description: Class ID
+    get:
+      summary: Get class by ID
+      tags:
+        - Class
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Class'
+      operationId: get-class-classId
+      description: Returns class with matching ID.
+  '/class/{classId}/classTeachers':
+    parameters:
+      - schema:
+          type: integer
+        name: classId
+        in: path
+        required: true
+        description: Class ID
+    get:
+      summary: Get class teachers
+      tags:
+        - Class
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+      operationId: get-class-classId-classTeachers
+      description: Returns list of teachers for given class. Requires `read` permission on target class.
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: date
+          description: 'Date to query. If unset, defaults to request date.'
+  '/class/{classId}/students':
+    parameters:
+      - schema:
+          type: integer
+        name: classId
+        in: path
+        required: true
+        description: Class ID
+    get:
+      summary: Find students of given class
+      tags:
+        - Class
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+      operationId: get-class-classId-students
+      description: Finds list of students that study in given class. Requires `read_students` permission on target class.
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: studiedOn
+          description: 'Date on which students must have studied in the class (i.e. if student changed their class on day 23, but you are querying students for day 12). If not set, response will only include students that study in class at the request time.'
+        - schema:
+            type: string
+          in: query
+          name: queryAll
+          description: Makes server find every student (even those that do not study in given class at the request moment). Incompatible with `studiedOn` query param.
+  '/class/{classId}/students/asRoles':
+    parameters:
+      - schema:
+          type: integer
+        name: classId
+        in: path
+        required: true
+        description: Class ID
+    get:
+      summary: Get students of given class as roles
+      tags:
+        - Class
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+      operationId: get-class-classId-students-asRoles
+      description: Finds list of students that study in given class. Requires `read_students` permission on target class.
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: studiedOn
+          description: 'Date on which students must have studied in the class (i.e. if student changed their class on day 23, but you are querying students for day 12). If not set, response will only include students that study in class at the request time.'
+        - schema:
+            type: string
+          in: query
+          name: queryAll
+          description: Makes server find every student (even those that do not study in given class at the request moment). Incompatible with `studiedOn` query param.
+  '/class/{classId}/students/ordering':
+    parameters:
+      - schema:
+          type: integer
+        name: classId
+        in: path
+        required: true
+    get:
+      summary: Get students ordering in class
+      tags:
+        - Class
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    userId:
+                      type: integer
+                    place:
+                      type: integer
+      operationId: get-class-classId-students-ordering
+      description: |-
+        Returns list of object identifying, on which place should student be. Requires `read_students` permission on target class.
+
+        _Note:_ this call does not take date or time into account, so only list of students that study at the moment of request is returned. For older dates, consider merging currently studying pupils with alphabetically sorted list of students that studied in given class before but do not study now.
+  '/class/{classId}/subgroups':
+    parameters:
+      - schema:
+          type: integer
+        name: classId
+        in: path
+        required: true
+        description: Class ID
+    get:
+      summary: Retrieve list of subgroups in class
+      tags:
+        - Class
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    title:
+                      type: string
+                    classId:
+                      type: integer
+                    currentMembers:
+                      type: array
+                      description: Array of current students (User ID) that are in subgroup.
+                      items:
+                        type: integer
+      operationId: get-class-classId-subgroups
+      description: Returns list of subgroups in class. Requires `read_lessons` permission on target class
+  '/class/{classId}/lessons':
+    parameters:
+      - schema:
+          type: integer
+        name: classId
+        in: path
+        required: true
+    get:
+      summary: Get class's lessons list for date
+      tags:
+        - Class
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Lesson'
+      operationId: get-class-classId-lessons
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: date
+          required: true
+          description: Date to query
+      description: Returns list of lessons for given date. Requires `read_lessons` permission on target class.
+  '/class/{classId}/sync':
+    parameters:
+      - schema:
+          type: integer
+        name: classId
+        in: path
+        required: true
+    get:
+      summary: Sync class data with Schools.by
+      tags:
+        - Class
+      responses:
+        '202':
+          description: Accepted
+          headers:
+            Location:
+              schema:
+                type: string
+              description: WebSocket live status observation. See docs/Websocket-observation.md for more details.
+        '409':
+          description: Server does not have valid credentials to sync data with the data source. It is not known when user with applicable permissions will log in to update credentials.
+          headers: {}
+        '429':
+          description: 'Given class was already synced recently, so server rate-limited request. It is unknown, when that limit will be reset.'
+        '503':
+          description: Schools.by is unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: Suggested time in seconds in which client is advised to repeat the request
+      operationId: get-class-classId-sync
+      description: Syncs class data with so in Schools.by. Ask for user confirmation before sending this request. Requires `request_sync` permission on target class.
+  /classes:
+    get:
+      summary: Return all classes
+      tags:
+        - Classes
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Class'
+      operationId: get-classes
+      description: Returns all classes
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - FIRST
+              - SECOND
+          in: query
+          name: shift
+          description: Filter by shift
+  '/absence/{classId}':
+    parameters:
+      - schema:
+          type: string
+        name: classId
+        in: path
+        required: true
+        description: Class ID
+    get:
+      summary: Get absence data for class
+      tags:
+        - Absence
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  absences:
+                    type: array
+                    uniqueItems: true
+                    items:
+                      $ref: '#/components/schemas/Absence'
+                    readOnly: true
+                  noDataDates:
+                    type: array
+                    uniqueItems: true
+                    description: Dates on which there are no absence records. Empty if no query params given. Omits dates without lessons.
+                    items:
+                      type: string
+                      format: date
+                    readOnly: true
+      operationId: get-absence-classId
+      description: 'Returns list of class absences and a list of dates, on which no absence data is present. Requires `read_absence` on target class.'
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: date
+          description: Date for which to query absences. Incompatible with `startDate` and `endDate` params
+        - schema:
+            type: string
+          in: query
+          name: startDate
+          description: 'First date of query interval (inclusive). Incompatible with `date` param. If `endDate` is not set, assumes `endDate = LocalDate.now()`'
+        - schema:
+            type: string
+          in: query
+          name: endDate
+          description: Last date of query interval (inclusive). Incompatible with `date` param. Requires `startDate` to be set
+    put:
+      summary: Create absence record
+      tags:
+        - Absence
+      operationId: put-absence-classId
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Absence'
+        '409':
+          description: Similar absence record already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Absence'
+              examples: {}
+      description: Creates new absence record. Requires `edit_absence` permission on target class.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                studentId:
+                  type: integer
+                date:
+                  type: string
+                  format: date
+                  description: Must be in 3 days less or greater than request date
+                absenceType:
+                  $ref: '#/components/schemas/AbsenceType'
+                lessonsList:
+                  type: array
+                  description: List of lessons (their timetable places) on which student will be absent. This value is checked on the server to be valid (according to the class's lessons list)
+                  items:
+                    type: integer
+            examples:
+              example-1:
+                value:
+                  studentId: 0
+                  date: '2019-08-24'
+                  absenceType: ILLNESS
+                  lessonsList:
+                    - 0
+                    - 1
+                    - 2
+                    - 3
+                    - 4
+                    - 5
+        description: ''
+    patch:
+      summary: Modify existing absence record
+      operationId: patch-absence-classId
+      tags:
+        - Absence
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: Class or absence with given ID was not found
+      description: Modifies existing absence record. Requires `edit_absence` permission on target class.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                absenceId:
+                  type: integer
+                absenceType:
+                  $ref: '#/components/schemas/AbsenceType'
+                lessonsList:
+                  type: array
+                  items:
+                    type: integer
+              required:
+                - absenceId
+  '/absence/{classId}/emptyData':
+    parameters:
+      - schema:
+          type: string
+        name: classId
+        in: path
+        required: true
+    post:
+      summary: Mark class as data-rich
+      operationId: post-absence-classId-emptyData
+      tags:
+        - Absence
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: Class was not found
+      description: 'Marks class as data=rich for given date. As a side-effect, sets all absence''s lessonsList to empty lists (so that no student missed a lesson). Requires `edit_absence` permission on target class.'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date:
+                  type: string
+                  format: date
+  /absences:
+    get:
+      summary: Get all absences
+      tags:
+        - Absences
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  absences:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Absence'
+                  noData:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Class'
+      operationId: get-absences
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: date
+          required: true
+          description: Date to find absences on.
+      description: |-
+        Returns all absences for given date. Requires `read_all_absences` permission.
+        See also: `/users` request to get users from absence list
+  /absences/summary:
+    get:
+      summary: Get absence summaries
+      tags:
+        - Absences
+      responses:
+        '200':
+          description: |-
+            OK
+
+            **Important!** Schema of the body given down there is the schema of **a value** in a dictionary. Key is a string of date type.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: '**Important!** This schema is the schema of **a value**. Key is a string of date type.'
+                properties:
+                  firstShift:
+                    type: object
+                    properties:
+                      ILLNESS:
+                        type: integer
+                      HEALING:
+                        type: integer
+                      REQUEST:
+                        type: integer
+                      DECREE:
+                        type: integer
+                      OTHER:
+                        type: integer
+                  secondShift:
+                    type: object
+                    properties:
+                      ILLNESS:
+                        type: integer
+                      HEALING:
+                        type: integer
+                      REQUEST:
+                        type: integer
+                      DECREE:
+                        type: integer
+                      OTHER:
+                        type: integer
+                  noDataClasses:
+                    type: array
+                    description: List of classes that did not send any absence data
+                    items:
+                      $ref: '#/components/schemas/Class'
+                  totalStudents:
+                    type: object
+                    description: Count of students in each shift
+                    properties:
+                      firstShift:
+                        type: integer
+                      secondShift:
+                        type: integer
+              examples:
+                Example:
+                  value:
+                    '2022-02-02':
+                      firstShift:
+                        ILLNESS: 24
+                        HEALING: 54
+                        REQUEST: 92
+                        DECREE: 2
+                        OTHER: 2
+                      secondShift:
+                        ILLNESS: 2
+                        HEALING: 0
+                        REQUEST: 0
+                        DECREE: 0
+                        OTHER: 0
+                      noDataClasses:
+                        - id: 26215
+                          title: 10 "А"
+                          shift: FIRST
+      operationId: get-absences-summary
+      description: 'Returns absence summaries (only amount of students for each absence type). If no query is given, returns data only for the date of request. Requires `read_statistics` permission.'
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: startDate
+          description: 'First date for query (inclusive). If `endDate` is not set, assumes `endDate = LocalDate.now()`'
+        - schema:
+            type: string
+          in: query
+          name: endDate
+          description: Last date for query (inclusive). Requires `startDate` to be set
+  '/teacher/{userId}/lessons':
+    parameters:
+      - schema:
+          type: string
+        name: userId
+        in: path
+        required: true
+        description: User ID of a user
+    get:
+      summary: Get lessons list of teacher for date
+      tags:
+        - Lessons
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Lesson'
+        '400':
+          description: Malformed request or the user with given ID does not have a valid teacher role at the date of request
+      operationId: get-teacher-userId-lessons
+      description: Returns list of all lessons that given teacher have on a given date. Requires `read_lessons` permission on target user.
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: date
+          description: 'Query date. If not set, server will assume `date = LocalDate.now()`'
+  /templates:
+    get:
+      summary: Get available templates
+      tags:
+        - Templating
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    templateId:
+                      type: string
+                    displayName:
+                      type: string
+                    fields:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          displayName:
+                            type: string
+                            description: Name of the field on Russian language
+                          suggestedValues:
+                            type: array
+                            description: Values that user is able to choose from
+                            items:
+                              type: object
+                              properties:
+                                value:
+                                  type: string
+                                displayName:
+                                  type: string
+                          type:
+                            type: string
+                            enum:
+                              - DATE
+                              - CLASSID
+                              - USERID
+                              - STRING
+                            description: 'Field type. If no suggested values are offered, user is offered to fill that field by themselves'
+              examples:
+                School-wide absence report:
+                  value:
+                    - templateId: SchoolAbsenceReport
+                      displayName: Отчёт об отсутствующих в школе
+                      fields:
+                        - id: date
+                          displayName: Дата
+                          suggestedValues: []
+                          type: DATE
+                Class absence report:
+                  value:
+                    - templateId: ClassAbsenceReport
+                      displayName: Отчёт об отсутствии в классе
+                      fields:
+                        - id: date
+                          displayName: Дата
+                          suggestedValues: []
+                          type: DATE
+                        - id: classId
+                          displayName: Класс
+                          suggestedValues:
+                            - value: '26215'
+                              displayName: 10 "A"
+                          type: CLASSID
+      operationId: get-templates
+      description: Returns list of templates that user has access to. Requires no permissions.
+  /template:
+    post:
+      summary: Get filled template
+      operationId: post-template
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                    description: Name of a generated file in a human-readable manner. (note that filename contained in `url` property is not human readable and usually is just a unique ID of a generated file)
+                  mime:
+                    type: string
+                    description: MIME-type of a file
+                  url:
+                    type: string
+                    description: 'URL of a generated report. No authentication is required to download the file. Note that filename in the URL is different than real file name (see `filename` property) and that URL may not be on the same host with API endpoint (it is guaranteed that browsers will be able to do CORS requests, though)'
+                  expiresIn:
+                    type: integer
+                    description: Number of seconds before responded URL becomes unavailable
+        '400':
+          description: Malformed request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error message that can be shown to user
+      description: Fills template to a ready report and responds with temp file location and it's metadata
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                fields:
+                  type: object
+                  description: 'Map of <string, string>, where key is the field ID and value is JSON-ified field data. (Numbers must also be in a string representation)'
+              required:
+                - id
+      tags:
+        - Templating
+  /bellsTimetable:
+    get:
+      summary: Get bells timetable
+      tags:
+        - Timetable
+        - School
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  firstShift:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TimetableCell'
+                  secondShift:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TimetableCell'
+      operationId: get-bellsTimetable
+      parameters: []
+      description: Returns timetable of school bells. Requires no permissions.
+  /school:
+    get:
+      summary: Get school info
+      tags:
+        - School
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: object
+                    properties:
+                      nominative:
+                        type: string
+                      genitive:
+                        type: string
+                        description: Genitive form of the title
+                      dative:
+                        type: string
+                      accusative:
+                        type: string
+                      instrumental:
+                        type: string
+                      prepositional:
+                        type: string
+                  schoolsBySubdomain:
+                    type: string
+      operationId: get-school
+      security: []
+      description: 'Returns information about school (it''s titles, Schools.by subdomain, etc.)'
+  /roles:
+    get:
+      summary: Get matching roles
+      tags: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '400':
+          description: One or more query params are invalid or role information key does not exist
+        '403':
+          description: User doesn't have enough permissions to read all roles
+      operationId: get-roles
+      description: ''
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: roleId
+          description: Role ID. See roles doc for more info
+          required: true
+        - schema:
+            type: string
+          in: query
+          name: validOn
+          description: Date and time on which role must valid
+        - schema:
+            type: string
+          in: query
+          name: <additional role information key>
+          description: Any other query param will be treated as Additional Role Information
+components:
+  schemas:
+    User:
+      title: User
+      type: object
+      description: ''
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the given user.
+        name:
+          type: object
+          properties:
+            firstName:
+              type: string
+              description: First name of the user.
+            middleName:
+              type: string
+              description: Middle name of the user.
+            lastName:
+              type: string
+              description: Last name of the user.
+            shortForm:
+              type: string
+              description: Short form of the user's name. (how user is supposed to be called in UI)
+      required:
+        - id
+        - firstName
+        - lastName
+    Role:
+      title: Role
+      x-stoplight:
+        id: ioohifv2ozn6n
+      type: object
+      x-examples:
+        example:
+          uniqueId: a1e12d74-d756-40d1-9bb3-519def353f44
+          userId: 123456
+          role: CLASS.AbsenceProvider
+          additionalInformation:
+            CLASS.AbsenceProvider.classID: 26215
+            CLASS.AbsenceProvider.delegatedBy: 123321
+          roleGrantedDateTime: '2019-08-24T14:15:22+03:00'
+          roleRevokedDateTime: null
+      description: 'Please, see docs/roles.md in Eversity Server repo for more information'
+      properties:
+        uniqueId:
+          type: string
+          format: uuid
+          readOnly: true
+        userId:
+          type: integer
+          readOnly: true
+        role:
+          $ref: '#/components/schemas/RoleID'
+        additionalInformation:
+          type: object
+          description: Object with any additional data related to the role
+        roleGrantedDateTime:
+          type: string
+          format: date-time
+          readOnly: true
+        roleRevokedDateTime:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+    Class:
+      title: Class
+      x-stoplight:
+        id: arjdd0p3493uz
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        shift:
+          type: string
+          enum:
+            - FIRST
+            - SECOND
+      x-examples:
+        10 "А":
+          id: 26215
+          title: 10 "А"
+          shift: FIRST
+    Lesson:
+      title: Lesson
+      x-stoplight:
+        id: ga7pma3t171xf
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        date:
+          type: string
+          format: date
+        placeInTimetable:
+          type: integer
+        shift:
+          type: string
+          enum:
+            - FIRST
+            - SECOND
+        classId:
+          type: integer
+        subgroupId:
+          type: integer
+          nullable: true
+    Absence:
+      title: Absence
+      x-stoplight:
+        id: 055ivdtqd6x4m
+      type: object
+      x-examples:
+        example-1:
+          id: 0
+          studentRole:
+            uniqueId: a1e12d74-d756-40d1-9bb3-519def353f44
+            userId: 0
+            role: CLASS.Student
+            additionalInformation:
+              CLASS.Student.classID: 26215
+            roleGrantedDateTime: '2019-08-24T14:15:22+03:00'
+            roleRevokedDateTime: null
+          absenceDate: '2019-08-25'
+          classId: 26215
+          absenceType: ILLNESS
+          lessonsList:
+            - 0
+            - 1
+            - 2
+            - 3
+            - 4
+            - 5
+            - 6
+          createdBy:
+            uniqueId: a1e12d74-d756-40d1-9bb3-519def353f44
+            userId: 123456
+            role: CLASS.AbsenceProvider
+            additionalInformation:
+              CLASS.AbsenceProvider.classID: 26215
+              CLASS.AbsenceProvider.delegatedBy: 123321
+            roleGrantedDateTime: '2019-08-24T14:15:22+03:00'
+            roleRevokedDateTime: null
+          created: '2019-08-25T14:15:22Z'
+          lastUpdatedBy:
+            uniqueId: a1e12d74-d756-40d1-9bb3-519def353f44
+            userId: 123456
+            role: CLASS.AbsenceProvider
+            additionalInformation:
+              CLASS.AbsenceProvider.classID: 26215
+              CLASS.AbsenceProvider.delegatedBy: 123321
+            roleGrantedDateTime: '2019-08-24T14:15:22Z'
+            roleRevokedDateTime: null
+          lastUpdated: '2019-08-25T16:15:22Z'
+      properties:
+        id:
+          type: integer
+        studentRole:
+          $ref: '#/components/schemas/Role'
+        absenceDate:
+          type: string
+          format: date
+        classId:
+          type: integer
+          readOnly: true
+        absenceType:
+          $ref: '#/components/schemas/AbsenceType'
+        lessonsList:
+          type: array
+          description: 'List of timetable places, on which student was absent'
+          items:
+            type: integer
+        createdBy:
+          type: integer
+        created:
+          type: string
+          format: date-time
+          readOnly: true
+        lastUpdatedBy:
+          description: Read-only property
+          type: integer
+          nullable: true
+        lastUpdated:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+    AbsenceType:
+      type: string
+      title: AbsenceType
+      x-stoplight:
+        id: ys47gw9yppb0b
+      enum:
+        - ILLNESS
+        - HEALING
+        - REQUEST
+        - COMPETITION
+        - DECREE
+        - OTHER_DISRESPECTFUL
+    TimetableCell:
+      title: TimetableCell
+      x-stoplight:
+        id: hgbus7y6g6gm3
+      type: object
+      properties:
+        place:
+          type: integer
+          minimum: 0
+          maximum: 15
+        timeConstraints:
+          type: object
+          properties:
+            startHour:
+              type: integer
+              minimum: 0
+              maximum: 23
+            startMinute:
+              type: integer
+              minimum: 0
+              maximum: 59
+            endHour:
+              type: integer
+              minimum: 0
+              maximum: 23
+            endMinute:
+              type: integer
+              minimum: 0
+              maximum: 59
+      description: Cell in the timetable
+      x-examples:
+        First lesson in first shift:
+          place: 1
+          timeConstraints:
+            startHour: 9
+            startMinute: 0
+            endHour: 9
+            endMinute: 45
+    TimetableLessonCell:
+      title: TimetableLessonCell
+      x-stoplight:
+        id: dxkbsbcres5o1
+      type: object
+      properties:
+        place:
+          type: integer
+        title:
+          type: string
+    RoleID:
+      type: string
+      title: RoleID
+      x-stoplight:
+        id: 36esnlvzf855b
+      enum:
+        - CLASS.AbsenceProvider
+        - CLASS.Student
+        - CLASS.ClassTeacher
+        - SCHOOL.SocialTeacher
+        - SERVICE.SystemAdministrator
+        - SCHOOL.Administration
+        - CLASS.Teacher
+  securitySchemes:
+    JWT:
+      type: http
+      scheme: bearer
+security:
+  - JWT: []

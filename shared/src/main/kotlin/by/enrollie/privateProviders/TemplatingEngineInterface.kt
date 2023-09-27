@@ -9,6 +9,7 @@
 package by.enrollie.privateProviders
 
 import by.enrollie.data_classes.Roles
+import by.enrollie.exceptions.BadArgumentException
 import java.io.File
 
 interface TemplatingEngineInterface {
@@ -41,7 +42,7 @@ interface TemplatingEngineInterface {
 
     /**
      * Data class representing a template.
-     * @param templateID ID of the template. May be not human-readable.
+     * @param templateID ID of the template. May be not human-readable, but must only contain letters, numbers, underscores and dashes.
      * @param displayName Human-readable name of the template on Russian language.
      * @param fields List of template fields
      * @param allowedRoles List of roles who have sufficient permissions to use this template.
@@ -70,6 +71,7 @@ interface TemplatingEngineInterface {
      * Renders a template with the given fields.
      * @throws IllegalArgumentException if model does not contain all required fields.
      * @throws NoSuchElementException if no template with the given ID is found.
+     * @throws BadArgumentException if some given fields are syntactically correct, but they make no logical sense.
      */
     fun renderTemplate(template: String, model: Map<String, String>): File
 }

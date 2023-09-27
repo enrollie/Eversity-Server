@@ -15,11 +15,17 @@ import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.plugins.UserPrincipal
 import by.enrollie.serializers.LocalDateSerializer
 import by.enrollie.util.parseDate
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.MapSerializer
@@ -27,6 +33,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.mapSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -90,6 +97,21 @@ private class AbsencesSummaryResponseSerializer : KSerializer<AbsencesSummaryRes
 }
 
 private fun Route.absencesSummaryGet() {
+    val absenceSummariesCache: Cache<ClosedRange<LocalDateTime>, Map<LocalDate, AbsencesSummaryElement>> =
+        Caffeine.newBuilder().maximumSize(5).initialCapacity(5).expireAfterWrite(Duration.ofMinutes(10)).build()
+
+    @OptIn(DelicateCoroutinesApi::class)
+    val context = newSingleThreadContext("AbsencesCacheListener")
+    CoroutineScope(context).launch {
+        ProvidersCatalog.databaseProvider.absenceProvider.eventsFlow.collect { event ->
+            absenceSummariesCache.asMap().keys.forEach {
+                if (it.contains(event.eventSubject.absenceDate.atStartOfDay())) {
+                    absenceSummariesCache.invalidate(it)
+                }
+            }
+        }
+    }
+
     get("/summary") {
         val user = call.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
         ProvidersCatalog.authorization.authorize(
@@ -107,9 +129,18 @@ private fun Route.absencesSummaryGet() {
         if (endDate != null && endDate < startDate) {
             return@get call.respond(HttpStatusCode.BadRequest)
         }
+        if (startDate != null && endDate != null) {
+            absenceSummariesCache.getIfPresent(startDate.atStartOfDay()..endDate.atStartOfDay())?.also {
+                return@get call.respond(AbsencesSummaryResponse(it))
+            }
+        } else {
+            absenceSummariesCache.getIfPresent(LocalDate.now().atStartOfDay()..LocalDate.now().atStartOfDay())?.also {
+                return@get call.respond(AbsencesSummaryResponse(it))
+            }
+        }
         val (absences, dates) = if (startDate != null && endDate != null) {
             ProvidersCatalog.databaseProvider.absenceProvider.getAbsences(startDate to endDate)
-                .filterNot{ it.lessonsList.isEmpty() }
+                .filterNot { it.lessonsList.isEmpty() }
                 .fold(mutableMapOf<LocalDate, List<AbsenceRecord>>()) { acc, absenceRecord ->
                     acc[absenceRecord.absenceDate] = (acc[absenceRecord.absenceDate] ?: listOf()).plus(absenceRecord)
                     acc
@@ -118,7 +149,7 @@ private fun Route.absencesSummaryGet() {
             ).toList()
         } else {
             ProvidersCatalog.databaseProvider.absenceProvider.getAbsences(LocalDate.now())
-                .filterNot{ it.lessonsList.isEmpty() }
+                .filterNot { it.lessonsList.isEmpty() }
                 .fold(mutableMapOf<LocalDate, List<AbsenceRecord>>()) { acc, absenceRecord ->
                     acc[absenceRecord.absenceDate] = (acc[absenceRecord.absenceDate] ?: listOf()).plus(absenceRecord)
                     acc
@@ -197,6 +228,11 @@ private fun Route.absencesSummaryGet() {
                 )
             }
             summary
+        }
+        if (startDate != null && endDate != null) {
+            absenceSummariesCache.put(startDate.atStartOfDay()..endDate.atStartOfDay(), summary)
+        } else {
+            absenceSummariesCache.put(LocalDate.now().atStartOfDay()..LocalDate.now().atStartOfDay(), summary)
         }
         call.respond(AbsencesSummaryResponse(summary))
     }

@@ -307,6 +307,12 @@ interface DatabaseLessonsProviderInterface {
     fun deleteLesson(lessonID: LessonID)
 
     /**
+     * Deletes all lessons in list. If lesson does not exist, it is ignored.
+     * **IMPORTANT:** This method is destructive and cannot be undone.
+     */
+    fun deleteLessons(lessonIDs: List<LessonID>)
+
+    /**
      * Returns a map of journalID corresponding to its title (or to null, if there is no such journal).
      */
     fun getJournalTitles(journals: List<JournalID>): Map<JournalID, String?>
@@ -526,6 +532,21 @@ interface DatabaseAuthenticationDataProviderInterface {
      * Revokes given token
      */
     fun revokeToken(token: AuthenticationToken)
+
+    /**
+     * Revokes matching token
+     */
+    fun revokeToken(token: String)
+
+    /**
+     * Revokes all user tokens
+     */
+    fun revokeAllTokens(userID: UserID)
+
+    /**
+     * Gets user token by token string
+     */
+    fun getToken(token: String): AuthenticationToken?
 
     /**
      * Tries to find token and returns user associated with it (null else).

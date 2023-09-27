@@ -12,8 +12,8 @@ import by.enrollie.providers.ConfigurationInterface
 import by.enrollie.providers.DatabaseProviderInterface
 
 interface ApplicationProvider {
-    @Suppress("DEPRECATION")
-    val metadata: ApplicationMetadata
+    @Deprecated("Use DatabaseProviderInterface instead. Will be removed in API v1.0", ReplaceWith("environment"), DeprecationLevel.WARNING)
+    val metadata: @Suppress("DEPRECATION") ApplicationMetadata
     val configuration: ConfigurationInterface
     val environment: EnvironmentInterface
     val database: DatabaseProviderInterface

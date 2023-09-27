@@ -9,16 +9,20 @@
 package by.enrollie.impl
 
 import by.enrollie.data_classes.*
+import by.enrollie.data_classes.Lesson
+import by.enrollie.data_classes.Name
+import by.enrollie.data_classes.SchoolClass
+import by.enrollie.data_classes.Subgroup
+import by.enrollie.data_classes.User
 import by.enrollie.exceptions.RateLimitException
 import by.enrollie.extensions.fromParserName
 import by.enrollie.plugins.jwtProvider
+import by.enrollie.privateProviders.EnvironmentInterface
 import by.enrollie.providers.DataSourceCommunicatorInterface
+import by.enrollie.providers.DatabaseProviderInterface
 import by.enrollie.providers.DatabaseRolesProviderInterface
 import by.enrollie.util.getTimedWelcome
-import com.neitex.BadSchoolsByCredentials
-import com.neitex.Credentials
-import com.neitex.SchoolsByParser
-import com.neitex.SchoolsByUserType
+import com.neitex.*
 import io.ktor.util.collections.*
 import io.sentry.Breadcrumb
 import io.sentry.Hint
@@ -32,7 +36,7 @@ import java.time.LocalDateTime
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
-class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
+class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface, private val environment: EnvironmentInterface) : DataSourceCommunicatorInterface {
     private val registerUUIDs = ConcurrentHashMap<String, Pair<UserID, Credentials>>(100)
     private val usersJobsBroadcaster = MutableSharedFlow<Triple<UserID, Credentials, String>>(0, 5)
     private val processingUsers = ConcurrentSet<UserID>()
@@ -42,7 +46,8 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
     private val classSyncJobsBroadcaster = MutableSharedFlow<Triple<ClassID, Credentials?, String>>(0, 5)
     private val rateLimitClassList = ConcurrentSet<ClassID>()
 
-    private val scope = CoroutineScope(Dispatchers.IO)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val scope = CoroutineScope(Dispatchers.IO.limitedParallelism(20))
     private val broadcaster = MutableSharedFlow<DataSourceCommunicatorInterface.Message>(15, 500)
     private val logger = LoggerFactory.getLogger(DataSourceCommunicatorImpl::class.java)
 
@@ -56,7 +61,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
         if (processingUsers.contains(userID)) {
             return registerUUIDs.entries.first { it.value.first == userID }.key
         }
-        require(ProvidersCatalog.databaseProvider.usersProvider.getUser(userID) == null) { "User is already registered" }
+        require(database.usersProvider.getUser(userID) == null) { "User is already registered" }
         processingUsers.add(userID)
         val uuid = "u-${UUID.randomUUID()}"
         registerUUIDs[uuid] = Pair(userID, schoolsByCredentials)
@@ -94,9 +99,16 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
         return uuid
     }
 
-    private fun errorMessage(uuid: String, message: String? = null) = DataSourceCommunicatorInterface.Message(
-        uuid, DataSourceCommunicatorInterface.MessageType.FAILURE, message ?: "Что-то пошло не так :(", 1, 1, mapOf()
-    )
+    private fun errorMessage(uuid: String, message: String? = null, exception: Throwable? = null) =
+        DataSourceCommunicatorInterface.Message(
+            uuid,
+            DataSourceCommunicatorInterface.MessageType.FAILURE,
+            message
+                ?: "Что-то пошло не так :(${if (environment.environmentType.verboseLogging()) "\nОшибка: ${exception.toString()}" else ""}",
+            1,
+            1,
+            mapOf()
+        )
 
     init {
         val handler = CoroutineExceptionHandler { _, throwable ->
@@ -112,7 +124,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                     } catch (e: Exception) {
                         logger.error("Error while registering user ${it.first} (uuid=${it.third}, uncaught)", e)
                         Sentry.captureException(e, Hint())
-                        broadcaster.emit(errorMessage(it.third))
+                        broadcaster.emit(errorMessage(it.third, exception = e))
                     } finally {
                         registerUUIDs.remove(it.third)
                         processingUsers.remove(it.first)
@@ -130,7 +142,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                     } catch (e: Exception) {
                         logger.error("Error while syncing class ${it.first} (uuid=${it.third}, uncaught)", e)
                         Sentry.captureException(e, Hint())
-                        broadcaster.emit(errorMessage(it.third))
+                        broadcaster.emit(errorMessage(it.third, exception = e))
                         rateLimitClassList.remove(it.first)
                     } finally {
                         logger.debug("Class ${it.first} has been synced")
@@ -145,13 +157,13 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
     private suspend fun getAppropriateCredentials(
         classID: ClassID, ignoredCredentials: List<Credentials>
     ): Credentials? {
-        val classTeacherRoles = ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch {
+        val classTeacherRoles = database.rolesProvider.getAllRolesByMatch {
             it.role == Roles.CLASS.CLASS_TEACHER && it.getField(Roles.CLASS.CLASS_TEACHER.classID) == classID && it.roleRevokedDateTime == null
         }
         for (roleData in classTeacherRoles) {
-            val cookies = ProvidersCatalog.databaseProvider.customCredentialsProvider.getCredentials(
+            val cookies = database.customCredentialsProvider.getCredentials(
                 roleData.userID, "schools-csrfToken"
-            ) to ProvidersCatalog.databaseProvider.customCredentialsProvider.getCredentials(
+            ) to database.customCredentialsProvider.getCredentials(
                 roleData.userID, "schools-sessionID"
             )
             if (cookies.first != null && cookies.second != null) {
@@ -161,29 +173,35 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                 }
                 SchoolsByParser.AUTH.checkCookies(credentials).fold({ valid ->
                     if (valid) return credentials else {
-                        ProvidersCatalog.databaseProvider.customCredentialsProvider.clearCredentials(
-                            roleData.userID, "schools-csrfToken"
-                        )
-                        ProvidersCatalog.databaseProvider.customCredentialsProvider.clearCredentials(
-                            roleData.userID, "schools-sessionID"
-                        )
+                        database.runInSingleTransaction { database ->
+                            database.customCredentialsProvider.clearCredentials(
+                                roleData.userID, "schools-csrfToken"
+                            )
+                            database.customCredentialsProvider.clearCredentials(
+                                roleData.userID, "schools-sessionID"
+                            )
+                        }
                     }
                 }, {
                     logger.error(
                         "Error while checking cookies for class teacher ${roleData.userID} of class $classID", it
                     )
-                    Sentry.captureException(it, Hint())
+                    if (it !is SchoolsByUnavailable)
+                        Sentry.captureException(it, Hint())
                 })
             }
         }
-        for (roleData in ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch {
+        val administrationRoles = database.rolesProvider.getAllRolesByMatch {
             it.role == Roles.SCHOOL.ADMINISTRATION && it.roleRevokedDateTime == null
-        }) {
-            val cookies = ProvidersCatalog.databaseProvider.customCredentialsProvider.getCredentials(
-                roleData.userID, "schools-csrfToken"
-            ) to ProvidersCatalog.databaseProvider.customCredentialsProvider.getCredentials(
-                roleData.userID, "schools-sessionID"
-            )
+        }
+        for (roleData in administrationRoles) {
+            val cookies = database.runInSingleTransaction { database ->
+                database.customCredentialsProvider.getCredentials(
+                    roleData.userID, "schools-csrfToken"
+                ) to database.customCredentialsProvider.getCredentials(
+                    roleData.userID, "schools-sessionID"
+                )
+            }
             if (cookies.first != null && cookies.second != null) {
                 val credentials = Credentials(cookies.first!!, cookies.second!!)
                 if (credentials in ignoredCredentials) {
@@ -192,10 +210,10 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                 SchoolsByParser.AUTH.checkCookies(credentials).fold({ valid ->
                     if (valid) return credentials else {
                         logger.debug("Credentials $credentials are not valid")
-                        ProvidersCatalog.databaseProvider.customCredentialsProvider.clearCredentials(
+                        database.customCredentialsProvider.clearCredentials(
                             roleData.userID, "schools-csrfToken"
                         )
-                        ProvidersCatalog.databaseProvider.customCredentialsProvider.clearCredentials(
+                        database.customCredentialsProvider.clearCredentials(
                             roleData.userID, "schools-sessionID"
                         )
                     }
@@ -203,7 +221,8 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                     logger.error(
                         "Error while checking cookies for administrator ${roleData.userID}", it
                     )
-                    Sentry.captureException(it, Hint())
+                    if (it !is SchoolsByUnavailable)
+                        Sentry.captureException(it, Hint())
                 })
             }
         }
@@ -211,11 +230,11 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
     }
 
     private fun invalidateCredentialsForClassTeachers(classID: ClassID) {
-        ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch {
-            it.role == Roles.CLASS.CLASS_TEACHER && it.getField(Roles.CLASS.CLASS_TEACHER.classID) == classID && it.roleRevokedDateTime == null
-        }.map { it.userID }.forEach { user ->
-            ProvidersCatalog.databaseProvider.authenticationDataProvider.getUserTokens(user).forEach {
-                ProvidersCatalog.databaseProvider.authenticationDataProvider.revokeToken(it)
+        database.runInSingleTransaction { database ->
+            database.rolesProvider.getAllRolesByMatch {
+                it.role == Roles.CLASS.CLASS_TEACHER && it.getField(Roles.CLASS.CLASS_TEACHER.classID) == classID && it.roleRevokedDateTime == null
+            }.map { it.userID }.forEach { user ->
+                database.authenticationDataProvider.revokeAllTokens(user)
             }
         }
     }
@@ -256,7 +275,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
             }
             attemptedCredentials.add(credentials)
             val clazz =
-                ProvidersCatalog.databaseProvider.classesProvider.getClass(classID) ?: throw IllegalArgumentException(
+                database.classesProvider.getClass(classID) ?: throw IllegalArgumentException(
                     "Class $classID not found"
                 )
             broadcaster.emit(
@@ -270,20 +289,30 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                 )
             )
             val newClassData = SchoolsByParser.CLASS.getClassData(classID, credentials).fold({
-                if (it.classTitle != clazz.title) ProvidersCatalog.databaseProvider.classesProvider.updateClass(
+                if (it.classTitle != clazz.title) database.classesProvider.updateClass(
                     classID, Field(SchoolClass::title), it.classTitle
                 )
+                // We are replacing class teachers later (near the end of this function)
                 it
             }, {
                 if (it is BadSchoolsByCredentials) {
                     logger.error("Bad credentials for class $classID")
-                    broadcaster.emit(errorMessage(uuid, badCredentialsMessage))
+                    broadcaster.emit(
+                        DataSourceCommunicatorInterface.Message(
+                            uuid,
+                            DataSourceCommunicatorInterface.MessageType.INFORMATION,
+                            badCredentialsMessage,
+                            1,
+                            totalSteps,
+                            mapOf()
+                        )
+                    )
                     return@fold null
                 }
                 logger.error("Error while getting class data for class $classID", it)
                 broadcaster.emit(
                     errorMessage(
-                        uuid, "Ошибка при получении основной информации о классе"
+                        uuid, "Ошибка при получении основной информации о классе", it
                     )
                 )
                 null
@@ -293,7 +322,16 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
             }, {
                 if (it is BadSchoolsByCredentials) {
                     logger.error("Bad credentials for class $classID")
-                    broadcaster.emit(errorMessage(uuid, badCredentialsMessage))
+                    broadcaster.emit(
+                        DataSourceCommunicatorInterface.Message(
+                            uuid,
+                            DataSourceCommunicatorInterface.MessageType.INFORMATION,
+                            badCredentialsMessage,
+                            1,
+                            totalSteps,
+                            mapOf()
+                        )
+                    )
                     invalidateCredentialsForClassTeachers(classID)
                     return@fold null
                 }
@@ -303,7 +341,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                 return@fold null
             })?.also {
                 step++
-                ProvidersCatalog.databaseProvider.classesProvider.updateClass(classID, Field(SchoolClass::shift), it)
+                database.classesProvider.updateClass(classID, Field(SchoolClass::shift), it)
             } ?: continue
             broadcaster.emit(
                 DataSourceCommunicatorInterface.Message(
@@ -316,11 +354,11 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                 )
             )
             val subgroups = SchoolsByParser.CLASS.getSubgroups(classID, credentials).fold({ list ->
-                ProvidersCatalog.databaseProvider.classesProvider.getSubgroups(classID).let { existing ->
+                database.classesProvider.getSubgroups(classID).let { existing ->
                     val mappedExisting = existing.associateBy { it.id }
                     list.filter { mappedExisting.containsKey(it.subgroupID) && mappedExisting[it.subgroupID]!!.title != it.title }
                         .takeIf { it.isNotEmpty() }?.forEach {
-                            ProvidersCatalog.databaseProvider.lessonsProvider.updateSubgroup(
+                            database.lessonsProvider.updateSubgroup(
                                 it.subgroupID,
                                 Field(Subgroup::title),
                                 it.title
@@ -328,7 +366,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                         }
                     val new = list.filter { !mappedExisting.containsKey(it.subgroupID) }.takeIf { it.isNotEmpty() }
                         ?.let { subgroupList ->
-                            ProvidersCatalog.databaseProvider.lessonsProvider.createSubgroups(subgroupList.map {
+                            database.lessonsProvider.createSubgroups(subgroupList.map {
                                 Subgroup(
                                     it.subgroupID, it.title, classID, listOf()
                                 )
@@ -339,7 +377,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                     val mappedDeleted = existing.filter { !mappedNew.containsKey(it.id) }.takeIf { it.isNotEmpty() }
                         ?.let { subgroupList ->
                             subgroupList.forEach {
-                                ProvidersCatalog.databaseProvider.lessonsProvider.deleteSubgroup(it.id)
+                                database.lessonsProvider.deleteSubgroup(it.id)
                             }
                             subgroupList.map { it.id }.toSet()
                         } ?: setOf()
@@ -349,7 +387,16 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
             }, {
                 if (it is BadSchoolsByCredentials) {
                     logger.error("Bad credentials for class $classID")
-                    broadcaster.emit(errorMessage(uuid, badCredentialsMessage))
+                    broadcaster.emit(
+                        DataSourceCommunicatorInterface.Message(
+                            uuid,
+                            DataSourceCommunicatorInterface.MessageType.INFORMATION,
+                            badCredentialsMessage,
+                            1,
+                            totalSteps,
+                            mapOf()
+                        )
+                    )
                     invalidateCredentialsForClassTeachers(classID)
                     return@fold null
                 }
@@ -359,34 +406,43 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                 null
             })?.distinctBy { it.subgroupID } ?: continue
             SchoolsByParser.CLASS.getPupilsList(classID, credentials).fold({ pupilsList ->
-                val existingUsers = ProvidersCatalog.databaseProvider.usersProvider.getUsers().map { it.id }.toHashSet()
+                val existingUsers = database.usersProvider.getUsers().map { it.id }.toHashSet()
                 pupilsList.filterNot { it.id in existingUsers }.takeIf { it.isNotEmpty() }?.let { pupilList ->
-                    ProvidersCatalog.databaseProvider.usersProvider.batchCreateUsers(pupilList.map {
+                    database.usersProvider.batchCreateUsers(pupilList.map {
                         User(
                             it.id, Name.fromParserName(it.name)
                         )
                     })
                 }
-                val existingRoles = ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch {
+                val existingRoles = database.rolesProvider.getAllRolesByMatch {
                     it.role == Roles.CLASS.STUDENT && it.getField(Roles.CLASS.STUDENT.classID) == classID && it.roleRevokedDateTime == null
                 }.map { it.userID }
                 pupilsList.filterNot { it.id in existingRoles }.takeIf { it.isNotEmpty() }?.let {
-                    ProvidersCatalog.databaseProvider.rolesProvider.batchAppendRolesToUsers(it.map { it.id }) { id ->
+                    database.rolesProvider.batchAppendRolesToUsers(it.map { it.id }) { id ->
                         DatabaseRolesProviderInterface.RoleCreationData(
                             id, Roles.CLASS.STUDENT, RoleInformationHolder(Roles.CLASS.STUDENT.classID to classID)
                         )
                     }
                 }
                 val mapped = pupilsList.map { it.id }.toHashSet()
-                ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch {
+                database.rolesProvider.getAllRolesByMatch {
                     it.role == Roles.CLASS.STUDENT && it.getField(Roles.CLASS.STUDENT.classID) == classID && it.roleRevokedDateTime == null && it.userID !in mapped
                 }.forEach {
-                    ProvidersCatalog.databaseProvider.rolesProvider.revokeRole(it.uniqueID, LocalDateTime.now())
+                    database.rolesProvider.revokeRole(it.uniqueID, LocalDateTime.now())
                 }
             }, {
                 if (it is BadSchoolsByCredentials) {
                     logger.error("Bad credentials for class $classID")
-                    broadcaster.emit(errorMessage(uuid, badCredentialsMessage))
+                    broadcaster.emit(
+                        DataSourceCommunicatorInterface.Message(
+                            uuid,
+                            DataSourceCommunicatorInterface.MessageType.INFORMATION,
+                            badCredentialsMessage,
+                            1,
+                            totalSteps,
+                            mapOf()
+                        )
+                    )
                     invalidateCredentialsForClassTeachers(classID)
                     return@fold null
                 }
@@ -395,10 +451,10 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                 logger.error("Error while getting pupils list (uuid=$uuid, classID=${classID})", it)
                 null
             }) ?: continue
-            ProvidersCatalog.databaseProvider.classesProvider.getSubgroups(classID).let { subgroupList ->
+            database.classesProvider.getSubgroups(classID).let { subgroupList ->
                 subgroupList.forEach { subgroup ->
                     if (subgroups.first { it.subgroupID == subgroup.id }.pupils != subgroup.members) {
-                        ProvidersCatalog.databaseProvider.lessonsProvider.updateSubgroup(
+                        database.lessonsProvider.updateSubgroup(
                             subgroup.id,
                             Field(Subgroup::members),
                             subgroups.first { it.subgroupID == subgroup.id }.pupils.distinct()
@@ -419,18 +475,23 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
             SchoolsByParser.CLASS.getAllLessons(
                 classID, subgroups.associate { it.subgroupID to it.title }, credentials
             ).fold({ list ->
-                ProvidersCatalog.databaseProvider.lessonsProvider.createOrUpdateLessons(list.map {
+                val mappedIDs = list.filterNot { it.teacher == null }.map { it.lessonID.toULong() }.toHashSet()
+                database.lessonsProvider.createOrUpdateLessons(list.filterNot { it.teacher == null }.map {
                     Lesson(
                         it.lessonID.toULong(),
                         it.title,
                         it.date,
                         it.place,
-                        it.teacher,
+                        it.teacher!!,
                         classID,
                         it.journalID!!,
                         it.subgroup
                     )
                 })
+                database.lessonsProvider.getLessonsForClass(classID)
+                    .filter { it.id !in mappedIDs }.also { deletedLessons ->
+                        database.lessonsProvider.deleteLessons(deletedLessons.map { it.id })
+                    }
                 list
             }, {
                 if (it is BadSchoolsByCredentials) {
@@ -445,12 +506,21 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                 null
             }) ?: continue
             SchoolsByParser.CLASS.getPupilsOrdering(classID, credentials).fold({ ordering ->
-                ProvidersCatalog.databaseProvider.classesProvider.setPupilsOrdering(classID,
+                database.classesProvider.setPupilsOrdering(classID,
                     ordering.map { it.first to it.second.toInt() })
             }, {
                 if (it is BadSchoolsByCredentials) {
                     logger.error("Bad credentials for class $classID")
-                    broadcaster.emit(errorMessage(uuid, badCredentialsMessage))
+                    broadcaster.emit(
+                        DataSourceCommunicatorInterface.Message(
+                            uuid,
+                            DataSourceCommunicatorInterface.MessageType.INFORMATION,
+                            badCredentialsMessage,
+                            1,
+                            totalSteps,
+                            mapOf()
+                        )
+                    )
                     invalidateCredentialsForClassTeachers(classID)
                     return@fold null
                 }
@@ -469,14 +539,14 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                     mapOf()
                 )
             )
-            ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch {
+            database.rolesProvider.getAllRolesByMatch {
                 it.role == Roles.CLASS.CLASS_TEACHER && it.getField(Roles.CLASS.CLASS_TEACHER.classID) == classID && it.roleRevokedDateTime == null
             }.also { rolesList ->
                 if (rolesList.none { it.userID == newClassData.classTeacherID }) {
                     rolesList.forEach {
-                        ProvidersCatalog.databaseProvider.rolesProvider.revokeRole(it.uniqueID, LocalDateTime.now())
+                        database.rolesProvider.revokeRole(it.uniqueID, LocalDateTime.now())
                     }
-                    ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
+                    database.rolesProvider.appendRoleToUser(
                         newClassData.classTeacherID, DatabaseRolesProviderInterface.RoleCreationData(
                             newClassData.classTeacherID,
                             Roles.CLASS.CLASS_TEACHER,
@@ -485,7 +555,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                     )
                 } else if (rolesList.size > 1) {
                     rolesList.filter { it.userID != newClassData.classTeacherID }.forEach {
-                        ProvidersCatalog.databaseProvider.rolesProvider.revokeRole(it.uniqueID, LocalDateTime.now())
+                        database.rolesProvider.revokeRole(it.uniqueID, LocalDateTime.now())
                     }
                 }
             }
@@ -521,13 +591,19 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
             it
         }, {
             Sentry.captureException(it)
-            broadcaster.emit(errorMessage(uuid))
+            broadcaster.emit(errorMessage(uuid, exception = it))
             logger.error("Error while getting user info (uuid=$uuid)", it)
             return
         })
         when (user.type) {
             SchoolsByUserType.PARENT -> {
-                broadcaster.emit(errorMessage(uuid, "Простите, но в этой системе нет функциональности для родителей"))
+                broadcaster.emit(
+                    errorMessage(
+                        uuid,
+                        "Простите, но сервис не имеет функционала для родителей",
+                        Exception("User $userID is parent")
+                    )
+                )
                 return
             }
 
@@ -535,33 +611,41 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                 broadcaster.emit(
                     errorMessage(
                         uuid,
-                        "Пожалуйста, попросите вашего классного руководителя синхронизировать данные класса и попробуйте снова."
+                        "Пожалуйста, попросите вашего классного руководителя синхронизировать данные класса и попробуйте снова.",
+                        Exception("Pupil $userID tried to register")
                     )
                 )
             }
 
-            SchoolsByUserType.TEACHER, SchoolsByUserType.ADMINISTRATION -> {
+            SchoolsByUserType.TEACHER, SchoolsByUserType.ADMINISTRATION, SchoolsByUserType.DIRECTOR -> {
                 val totalTeacherSteps = 9
                 var currentStep = 2
                 broadcaster.emit(
                     DataSourceCommunicatorInterface.Message(
                         uuid,
                         DataSourceCommunicatorInterface.MessageType.INFORMATION,
-                        "Судя по всему, вы учитель. Ищем ваш класс...",
+                        "Судя по всему, вы ${
+                            when (user.type) {
+                                SchoolsByUserType.TEACHER -> "учитель"
+                                SchoolsByUserType.ADMINISTRATION -> "часть администрации"
+                                SchoolsByUserType.DIRECTOR -> "директор"
+                                else -> throw IllegalStateException("The world is broken, unfortunately")
+                            }
+                        }. Ищем ваш класс...",
                         currentStep,
                         totalTeacherSteps,
                         mapOf()
                     )
                 )
-                val schoolClass = SchoolsByParser.TEACHER.getClassForTeacher(userID, credentials).fold({
+                val schoolClass = SchoolsByParser.TEACHER.getClassForTeacher(userID, credentials, user.type).fold({
                     it
                 }, {
                     Sentry.captureException(it)
-                    broadcaster.emit(errorMessage(uuid))
+                    broadcaster.emit(errorMessage(uuid, exception = it))
                     logger.error("Error while getting class info (uuid=$uuid)", it)
                     return
                 })
-                if (schoolClass != null && ProvidersCatalog.databaseProvider.classesProvider.getClass(schoolClass.id) == null) {
+                if (schoolClass != null && database.classesProvider.getClass(schoolClass.id) == null) {
                     currentStep++
                     Sentry.addBreadcrumb(Breadcrumb.info("User with ID $userID is teacher in class $schoolClass"))
                     broadcaster.emit(
@@ -578,7 +662,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                         if (it) TeachingShift.SECOND else TeachingShift.FIRST
                     }, {
                         Sentry.captureException(it)
-                        broadcaster.emit(errorMessage(uuid))
+                        broadcaster.emit(errorMessage(uuid, exception = it))
                         logger.error("Error while getting class shift (uuid=$uuid, classID=${schoolClass.id})", it)
                         return
                     })
@@ -598,7 +682,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                         it
                     }, {
                         Sentry.captureException(it)
-                        broadcaster.emit(errorMessage(uuid))
+                        broadcaster.emit(errorMessage(uuid, exception = it))
                         logger.error("Error while getting pupils list (uuid=$uuid, classID=${schoolClass.id})", it)
                         return
                     })
@@ -618,7 +702,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                         it
                     }, {
                         Sentry.captureException(it)
-                        broadcaster.emit(errorMessage(uuid))
+                        broadcaster.emit(errorMessage(uuid, exception = it))
                         logger.error("Error while getting pupils ordering (uuid=$uuid, classID=${schoolClass.id})", it)
                         return
                     })
@@ -638,20 +722,20 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                         it
                     }, {
                         Sentry.captureException(it)
-                        broadcaster.emit(errorMessage(uuid))
+                        broadcaster.emit(errorMessage(uuid, exception = it))
                         logger.error("Error while getting subgroups (uuid=$uuid, classID=${schoolClass.id})", it)
                         return
                     })
                     val lessons = SchoolsByParser.CLASS.getAllLessons(
                         schoolClass.id, subgroups.associate { it.subgroupID to it.title }, credentials
                     ).fold({ lessonList ->
-                        lessonList.filterNot { it.journalID == null }.map {
+                        lessonList.filterNot { it.journalID == null || it.teacher == null }.map {
                             Lesson(
                                 it.lessonID.toULong(),
                                 it.title,
                                 it.date,
                                 it.place,
-                                it.teacher,
+                                it.teacher!!,
                                 schoolClass.id,
                                 it.journalID!!,
                                 it.subgroup
@@ -659,9 +743,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                         }
                     }, {
                         Sentry.captureException(it)
-                        broadcaster.emit(
-                            errorMessage(uuid)
-                        )
+                        broadcaster.emit(errorMessage(uuid, exception = it))
                         logger.error("Error while getting lessons (uuid=$uuid, classID=${schoolClass.id})", it)
                         return
                     })
@@ -684,7 +766,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                                 .map { Pair(it.key, it.value.last()) }.toMap()
                         }, {
                             Sentry.captureException(it)
-                            broadcaster.emit(errorMessage(uuid))
+                            broadcaster.emit(errorMessage(uuid, exception = it))
                             logger.error("Error while getting transfers (uuid=$uuid, classID=${schoolClass.id})", it)
                             return
                         })
@@ -699,41 +781,50 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                             mapOf()
                         )
                     )
-                    ProvidersCatalog.databaseProvider.classesProvider.apply {
-                        createClass(
-                            SchoolClass(
-                                schoolClass.id, schoolClass.classTitle, shift
+                    database.runInSingleTransaction { database ->
+                        database.classesProvider.apply {
+                            createClass(
+                                SchoolClass(
+                                    schoolClass.id, schoolClass.classTitle, shift
+                                )
+                            )
+                            setPupilsOrdering(schoolClass.id, ordering.map { it.first to it.second.toInt() })
+                        }
+                        database.usersProvider.batchCreateUsers(pupils.map {
+                            User(
+                                it.id, Name.fromParserName(it.name)
+                            )
+                        } + User(userID, Name.fromParserName(user.name)))
+                        database.rolesProvider.batchAppendRolesToUsers(pupils.map { it.id }) { pupil ->
+                            DatabaseRolesProviderInterface.RoleCreationData(
+                                pupil, Roles.CLASS.STUDENT, RoleInformationHolder(
+                                    Roles.CLASS.STUDENT.classID to schoolClass.id
+                                ), transfers[pupil]?.second?.atStartOfDay() ?: LocalDateTime.now()
+                            )
+                        }
+                        if (database.rolesProvider.getAllRolesWithMatchingEntries(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id)
+                                .firstOrNull { it.userID == userID && it.roleRevokedDateTime == null } == null
+                        ) database.rolesProvider.appendRoleToUser(
+                            userID, DatabaseRolesProviderInterface.RoleCreationData(
+                                userID,
+                                Roles.CLASS.CLASS_TEACHER,
+                                RoleInformationHolder(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id)
                             )
                         )
-                        setPupilsOrdering(schoolClass.id, ordering.map { it.first to it.second.toInt() })
+                        database.lessonsProvider.apply {
+                            setJournalTitles(journalTitles)
+                            createSubgroups(subgroups.map {
+                                Subgroup(
+                                    it.subgroupID,
+                                    it.title,
+                                    schoolClass.id,
+                                    it.pupils
+                                )
+                            })
+                            createOrUpdateLessons(lessons)
+                        }
                     }
-                    ProvidersCatalog.databaseProvider.usersProvider.batchCreateUsers(pupils.map {
-                        User(
-                            it.id, Name.fromParserName(it.name)
-                        )
-                    } + User(userID, Name.fromParserName(user.name)))
-                    ProvidersCatalog.databaseProvider.rolesProvider.batchAppendRolesToUsers(pupils.map { it.id }) { pupil ->
-                        DatabaseRolesProviderInterface.RoleCreationData(
-                            pupil, Roles.CLASS.STUDENT, RoleInformationHolder(
-                                Roles.CLASS.STUDENT.classID to schoolClass.id
-                            ), transfers[pupil]?.second?.atStartOfDay() ?: LocalDateTime.now()
-                        )
-                    }
-                    if (ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesWithMatchingEntries(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id)
-                            .firstOrNull { it.userID == userID && it.roleRevokedDateTime == null } == null
-                    ) ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
-                        userID, DatabaseRolesProviderInterface.RoleCreationData(
-                            userID,
-                            Roles.CLASS.CLASS_TEACHER,
-                            RoleInformationHolder(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id)
-                        )
-                    )
-                    ProvidersCatalog.databaseProvider.lessonsProvider.apply {
-                        setJournalTitles(journalTitles)
-                        createSubgroups(subgroups.map { Subgroup(it.subgroupID, it.title, schoolClass.id, it.pupils) })
-                        createOrUpdateLessons(lessons)
-                    }
-                } else if (schoolClass != null && ProvidersCatalog.databaseProvider.classesProvider.getClass(schoolClass.id) != null) {
+                } else if (schoolClass != null && database.classesProvider.getClass(schoolClass.id) != null) {
                     currentStep = 8
                     Sentry.addBreadcrumb(Breadcrumb.info("Class ${schoolClass.id} already exists"))
                     broadcaster.emit(
@@ -746,19 +837,21 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                             mapOf()
                         )
                     )
-                    ProvidersCatalog.databaseProvider.usersProvider.createUser(
-                        User(
-                            userID, Name.fromParserName(user.name)
+                    database.runInSingleTransaction {database->
+                        database.usersProvider.createUser(
+                            User(
+                                userID, Name.fromParserName(user.name)
+                            )
                         )
-                    )
-                    ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
-                        userID, DatabaseRolesProviderInterface.RoleCreationData(
-                            userID,
-                            Roles.CLASS.CLASS_TEACHER,
-                            RoleInformationHolder(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id)
+                        database.rolesProvider.appendRoleToUser(
+                            userID, DatabaseRolesProviderInterface.RoleCreationData(
+                                userID,
+                                Roles.CLASS.CLASS_TEACHER,
+                                RoleInformationHolder(Roles.CLASS.CLASS_TEACHER.classID to schoolClass.id)
+                            )
                         )
-                    )
-                } else ProvidersCatalog.databaseProvider.usersProvider.createUser(
+                    }
+                } else database.usersProvider.createUser(
                     User(
                         userID, Name.fromParserName(user.name)
                     )
@@ -773,21 +866,25 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                         mapOf()
                     )
                 )
-                if (user.type == SchoolsByUserType.ADMINISTRATION) {
+                if (user.type == SchoolsByUserType.ADMINISTRATION || user.type == SchoolsByUserType.DIRECTOR) {
                     Sentry.addBreadcrumb(Breadcrumb.info("User is a part of school administration"))
-                    ProvidersCatalog.databaseProvider.rolesProvider.appendRoleToUser(
+                    if (environment.environmentType.verboseLogging())
+                        logger.debug("User is a part of school administration (uuid=$uuid, userID=$userID), creating administration role")
+                    database.rolesProvider.appendRoleToUser(
                         userID, DatabaseRolesProviderInterface.RoleCreationData(
                             userID, Roles.SCHOOL.ADMINISTRATION, RoleInformationHolder()
                         )
                     )
                 }
-                ProvidersCatalog.databaseProvider.customCredentialsProvider.setCredentials(
-                    userID, "schools-csrfToken", credentials.csrfToken
-                )
-                ProvidersCatalog.databaseProvider.customCredentialsProvider.setCredentials(
-                    userID, "schools-sessionID", credentials.sessionID
-                )
-                val token = ProvidersCatalog.databaseProvider.authenticationDataProvider.generateNewToken(userID)
+                val token = database.runInSingleTransaction {
+                    database.customCredentialsProvider.setCredentials(
+                        userID, "schools-csrfToken", credentials.csrfToken
+                    )
+                    database.customCredentialsProvider.setCredentials(
+                        userID, "schools-sessionID", credentials.sessionID
+                    )
+                    database.authenticationDataProvider.generateNewToken(userID)
+                }
                 broadcaster.emit(
                     DataSourceCommunicatorInterface.Message(
                         uuid,
@@ -797,7 +894,7 @@ class DataSourceCommunicatorImpl : DataSourceCommunicatorInterface {
                         totalTeacherSteps,
                         mapOf(
                             "userId" to userID.toString(),
-                            "token" to jwtProvider.signToken(User(userID, Name.fromParserName(user.name)), token.token)
+                            "token" to jwtProvider.signToken(userID, token.token)
                         )
                     )
                 )

@@ -179,6 +179,11 @@ class RoleInformationHolder(vararg information: Pair<Roles.Role.Field<*>, Any?>)
     fun getAsStringMap(): Map<String, Any?> = information
 
     operator fun get(field: Roles.Role.Field<*>): Any? = information[field.id]
+
+    fun <T> typedGet(field: Roles.Role.Field<T>): T? = information[field.id]?.let {
+        @Suppress("UNCHECKED_CAST")
+        it as? T?
+    }
 }
 
 @kotlinx.serialization.Serializable

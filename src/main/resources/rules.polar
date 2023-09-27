@@ -41,6 +41,7 @@ resource SchoolClass{
     "request_sync" if "CLASS.ClassTeacher";
     "request_sync" if "SCHOOL.Administration" on "school";
     "request_sync" if "SCHOOL.SocialTeacher" on "school";
+    "edit_roles" if "edit_roles" on "school";
     "edit_roles" if "request_sync";
 }
 
@@ -62,7 +63,8 @@ has_relation(School: School, "school", _: SchoolClass);
 
 has_permission(user: User, "read_absence", class: SchoolClass) if
     lesson in LessonsProvider.getTodayLessons(user) and
-    lesson.getClassID() = class.getId();
+    lesson.getClassID() = class.getId() and
+    TimeValidator.isCurrentLesson(lesson);
 
 has_permission(user: User, "edit_absence", class: SchoolClass) if
     has_permission(user, "read_absence", class) and

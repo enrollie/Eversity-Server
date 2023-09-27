@@ -8,6 +8,7 @@
 
 package by.enrollie
 
+import io.ktor.server.application.Application
 import by.enrollie.annotations.UnsafeAPI
 import by.enrollie.impl.*
 import by.enrollie.plugins.configureKtorPlugins
@@ -20,6 +21,8 @@ import by.enrollie.util.generateServerName
 import by.enrollie.util.getBootstrapText
 import by.enrollie.util.getServices
 import com.neitex.SchoolsByParser
+import com.neitex.SchoolsByUnavailable
+import io.github.z4kn4fein.semver.Version
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.routing.*
@@ -29,6 +32,7 @@ import kotlinx.coroutines.*
 import org.joda.time.DateTime
 import org.kodein.di.DI
 import org.kodein.di.bindSingleton
+import org.kodein.di.instance
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.lang.module.ModuleFinder
@@ -65,10 +69,12 @@ fun main() {
             override val environmentVariables: Map<String, String> = System.getenv()
         } to selfProperties.getProperty("schoolsByParserVersion"))
     }
-    logger.info("Starting Eversity Server (built on: ${DateTime(metadata.serverBuildTimestamp * 1000)}) on ${metadata.systemName} (server name: ${metadata.serverName})...")
+    logger.info("Starting Eversity Server ${metadata.serverVersion}#${metadata.serverBuildID} (built on: ${DateTime(metadata.serverBuildTimestamp * 1000)}) on ${metadata.systemName} (server name: ${metadata.serverName})...")
+    logger.debug("Server API version: ${metadata.serverApiVersion}")
+logger.debug("SchoolsBy parser version: $schoolsByParserVersion")
     println(getBootstrapText(metadata))
     val pluginsCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    val plugins = runBlocking { // Configure providers
+    runBlocking { // Configure providers
         val layer = run { // Configure layer
             File("plugins").mkdir()
             val pluginsFinder = ModuleFinder.of(Path("plugins"))
@@ -88,15 +94,23 @@ fun main() {
                 if (it.name in addedPlugins) {
                     throw IllegalStateException("Found another plugin with the same title: ${it.name} (its version is ${it.version})")
                 }
-                if (it.pluginApiVersion != metadata.serverApiVersion && !loadAnyVersion) {
+                val serverApiVersion = Version.parse(metadata.serverApiVersion)
+                val pluginApiVersion = Version.parse(it.pluginApiVersion, strict = false)
+                if (serverApiVersion < pluginApiVersion) {
+                    logger.warn("Plugin ${it.name} (version ${it.version}) was built against newer API version (${it.pluginApiVersion}) than the server (${metadata.serverApiVersion}).")
+                    if (!loadAnyVersion) {
+                        logger.warn("Skipping plugin ${it.name} (version ${it.version})...")
+                        return@async
+                    }
+                } else if (serverApiVersion != pluginApiVersion && !loadAnyVersion) {
                     logger.error("Plugin ${it.name} (version ${it.version}) was built for plugin API version ${it.pluginApiVersion}, but this server implements version ${metadata.serverApiVersion}. This plugin won't be loaded.")
                     return@async
-                } else if (it.pluginApiVersion != metadata.serverApiVersion && loadAnyVersion) {
+                } else if (serverApiVersion != pluginApiVersion && loadAnyVersion) {
                     logger.warn("Plugin ${it.name} (version ${it.version}) was built for plugin API version ${it.pluginApiVersion}, but this server implements version ${metadata.serverApiVersion}. This plugin will be loaded, but it might not work as expected.")
                 }
-                logger.info("Loading plugin ${it.name} v${it.version} (author: ${it.author})")
+                logger.info("Loading plugin ${it.name} ${it.version} (author: ${it.author})")
                 it.onLoad()
-                logger.info("Loaded plugin ${it.name} v${it.version}")
+                logger.info("Loaded plugin ${it.name} (version: ${it.version})")
                 addedPlugins += it.name
             }
         }.also {
@@ -131,33 +145,45 @@ fun main() {
         val dependencies = DI {
             bindSingleton { configuration }
             bindSingleton { database }
-            bindSingleton<DataSourceCommunicatorInterface> { DataSourceCommunicatorImpl() }
+            bindSingleton<EnvironmentInterface> { metadata }
             bindSingleton<CommandLineInterface> { CommandLine.instance }
-            bindSingleton<AuthorizationInterface> { AuthorizationProviderImpl() }
+            bindSingleton<AuthorizationInterface> {
+                AuthorizationProviderImpl(instance()) }
             bindSingleton<PluginsProviderInterface> { PluginsProviderImpl(plugins) }
             bindSingleton<EventSchedulerInterface> { EventSchedulerImpl() }
-            bindSingleton<SchoolsByMonitorInterface> { SchoolsByMonitorImpl() }
+            bindSingleton<SchoolsByMonitorInterface> { SchoolsByMonitorImpl(instance(), instance(), instance()) }
             bindSingleton<TemplatingEngineInterface> { TemplatingEngineImpl() }
-            bindSingleton<ExpiringFilesServerInterface> { ExpiringFilesServerImpl() }
-            bindSingleton<EnvironmentInterface> { metadata }
+            bindSingleton<ExpiringFilesServerInterface> { ExpiringFilesServerImpl(instance()) }
+            bindSingleton<DataSourceCommunicatorInterface> { DataSourceCommunicatorImpl(instance(), instance()) }
         }
         @OptIn(UnsafeAPI::class) setProvidersCatalog(ProvidersCatalogImpl(dependencies))
-        plugins
     }
     // Configure dependencies
     SchoolsByParser.setSubdomain(ProvidersCatalog.configuration.schoolsByConfiguration.baseUrl)
     logger.debug("SchoolsByParser subdomain: ${SchoolsByParser.schoolSubdomain}")
-    logger.debug("Initialized Schools.by status monitor")
     ProvidersCatalog.schoolsByStatus.init()
+    logger.debug("Initialized Schools.by status monitor")
     System.getenv()["SENTRY_DSN"]?.let {
         Sentry.init(SentryOptions().apply {
             dsn = it
             tracesSampleRate =
                 if (metadata.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT || metadata.environmentType == EnvironmentInterface.EnvironmentType.TESTING) 0.8 else 1.0
             isPrintUncaughtStackTrace = true
-            if (System.getenv()["EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY"]?.toBooleanStrictOrNull() == true) {
-                logger.warn("EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY is set to true. All exceptions will be logged, but not sent to Sentry.")
-                this.setBeforeSend { _, _ -> null }
+            this.environment = metadata.environmentType.name.lowercase()
+            release = metadata.serverVersion
+            val disableSending =
+                System.getenv()["EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY"]?.toBooleanStrictOrNull() == true
+            val sentryLogger = LoggerFactory.getLogger("Sentry")
+            if (disableSending)
+                sentryLogger.warn("EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY is set to true. All exceptions will be logged, but not sent to Sentry.")
+            setBeforeSend { event, hint ->
+                if (disableSending) return@setBeforeSend null
+                if (event.throwable is SchoolsByUnavailable) {
+                    sentryLogger.warn("Schools.by is unavailable, discarding sentry exception")
+                    return@setBeforeSend null
+                }
+                event.transaction
+                return@setBeforeSend event
             }
         })
         logger.debug("Sentry initialized")
@@ -173,14 +199,17 @@ fun main() {
         logger.warn("EVERSITY_STRESS_TEST_MODE is set to true. This server will be running in stress test mode. Communications with outside services using user-supplied data will be minimized. (though, some plugins may not respect this mode)")
     }
     logger.debug("Starting server...")
-    @OptIn(UnsafeAPI::class) StartupRoutine.schedule(ProvidersCatalog.eventScheduler)
+    @OptIn(UnsafeAPI::class) StartupRoutine.initialize(ProvidersCatalog.eventScheduler, ProvidersCatalog.commandLine)
     Runtime.getRuntime().addShutdownHook(by.enrollie.util.ShutdownHook())
+    val port = ProvidersCatalog.environment.environmentVariables["EVERSITY_PORT"]?.toIntOrNull() ?: 8080
 
-    embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
-        configureKtorPlugins()
-        configureStartStopListener(plugins)
-        routing {
-            registerAllRoutes()
-        }
-    }.start(true)
+    embeddedServer(Netty, port = port, host = "0.0.0.0", module = Application::appModule).start(true)
+}
+
+fun Application.appModule() {
+    configureKtorPlugins()
+    configureStartStopListener(ProvidersCatalog.plugins.list)
+    routing {
+        registerAllRoutes()
+    }
 }

@@ -8,6 +8,8 @@
 
 package by.enrollie.plugins
 
+import by.enrollie.impl.ProvidersCatalog
+import by.enrollie.privateProviders.EnvironmentInterface
 import com.osohq.oso.Exceptions.ForbiddenException
 import com.osohq.oso.Exceptions.NotFoundException
 import io.ktor.http.*
@@ -18,6 +20,7 @@ import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.util.*
+import io.sentry.Sentry
 import kotlinx.serialization.SerializationException
 import org.slf4j.LoggerFactory
 
@@ -27,25 +30,32 @@ internal fun Application.configureStatusPages() {
     }
     install(StatusPages) {
         exception<NotFoundException> { call, _ ->
-            logger.debug("User ${call.attributes.getOrNull(AttributeKey("userID"))} (callID ${call.callId}) was restricted from reading ${call.request.path()}")
+            if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT)
+                logger.debug("User ${call.attributes.getOrNull(AttributeKey("userID"))} (callID ${call.callId}) was restricted from reading ${call.request.path()}")
             call.respond(HttpStatusCode.NotFound)
         }
         exception<ForbiddenException> { call, _ ->
-            logger.debug("User ${call.attributes.getOrNull(AttributeKey("userID"))} (callID ${call.callId}) was restricted from acting on ${call.request.path()}")
+            if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT)
+                logger.debug("User ${call.attributes.getOrNull(AttributeKey("userID"))} (callID ${call.callId}) was restricted from acting on ${call.request.path()}")
             call.respond(HttpStatusCode.Forbidden)
         }
         exception<SerializationException> { call, e ->
-            logger.debug(
-                "User ${call.attributes.getOrNull(AttributeKey("userID"))} (callID ${call.callId}) sent bad body to ${call.request.path()} (message: ${e.message})"
-            )
+            if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT)
+                logger.debug(
+                    "User ${call.attributes.getOrNull(AttributeKey("userID"))} (callID ${call.callId}) sent bad body to ${call.request.path()} (message: ${e.message})"
+                )
             call.respond(HttpStatusCode.BadRequest)
         }
-        exception<BadRequestException> { call, _ ->
+        exception<BadRequestException> { call, cause ->
+            if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT)
+                logger.debug("BadRequest: User ${call.attributes.getOrNull(AttributeKey("userID"))} (callID ${call.callId}) sent bad body to ${call.request.path()} (message: ${cause.message})")
             call.respond(HttpStatusCode.BadRequest)
         }
 
         exception<Throwable> { call, cause ->
-            logger.debug("CallID: ${call.callId}", cause)
+            logger.error("CallID: ${call.callId}; user: ${call.attributes.getOrNull(AttributeKey("userID"))}", cause)
+            Sentry.addBreadcrumb("CallID: ${call.callId}")
+            Sentry.captureException(cause)
             call.respond(HttpStatusCode.InternalServerError)
         }
     }

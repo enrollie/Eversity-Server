@@ -14,6 +14,7 @@ import by.enrollie.data_classes.TimetableCell
 import by.enrollie.data_classes.TimetablePlaces
 import by.enrollie.exceptions.RateLimitException
 import by.enrollie.impl.ProvidersCatalog
+import by.enrollie.privateProviders.CommandLineInterface
 import by.enrollie.privateProviders.EventSchedulerInterface
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import com.neitex.SchoolsByParser
@@ -32,8 +33,8 @@ object StartupRoutine {
     private const val DEFAULT_DELAY = 1_000L
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
     private val logger = LoggerFactory.getLogger(this::class.java)
-    fun schedule(schedulerInterface: EventSchedulerInterface) {
-        ProvidersCatalog.commandLine.registerCommand(LiteralArgumentBuilder.literal<Unit?>("exit").executes {
+    fun initialize(schedulerInterface: EventSchedulerInterface, commandLine: CommandLineInterface) {
+        commandLine.registerCommand(LiteralArgumentBuilder.literal<Unit?>("exit").executes {
             logger.info("Shutting down...")
             Runtime.getRuntime().exit(0)
             0

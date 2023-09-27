@@ -10,6 +10,7 @@ package by.enrollie.plugins
 
 import by.enrollie.annotations.UnsafeAPI
 import by.enrollie.data_classes.User
+import by.enrollie.data_classes.UserID
 import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.privateProviders.*
 import by.enrollie.providers.ConfigurationInterface
@@ -50,8 +51,13 @@ internal fun Application.configureStartStopListener(plugins: List<PluginMetadata
     })
     environment.monitor.subscribe(ApplicationStarted) {
         val applicationProvider = object : ApplicationProvider {
+            @Deprecated(
+                "Use DatabaseProviderInterface instead. Will be removed in API v1.0",
+                replaceWith = ReplaceWith("environment"),
+                level = DeprecationLevel.WARNING
+            )
             @Suppress("DEPRECATION")
-            override val metadata: ApplicationMetadata = object : ApplicationMetadata{
+            override val metadata: ApplicationMetadata = object : ApplicationMetadata {
                 override val title: String = "Eversity Server"
                 override val version: String = ProvidersCatalog.environment.serverVersion
                 override val buildTimestamp: Long = ProvidersCatalog.environment.serverBuildTimestamp
@@ -61,6 +67,20 @@ internal fun Application.configureStartStopListener(plugins: List<PluginMetadata
             override val database: DatabaseProviderInterface = ProvidersCatalog.databaseProvider
             override val tokenSigner: TokenSignerProvider = object : TokenSignerProvider {
                 override fun signToken(user: User, token: String): String = jwtProvider.signToken(user, token)
+                override fun signToken(userID: UserID, token: String): String = jwtProvider.signToken(userID, token)
+
+                override fun getSignedTokenUser(token: String): User? =
+                    runCatching { jwtProvider.getJwtVerifier().verify(token) }.fold({ it }, { return null })
+                        .getClaim("user")?.asInt()?.let { userID ->
+                        ProvidersCatalog.databaseProvider.usersProvider.getUser(userID)
+                    }
+
+                override fun verifySignedToken(token: String): Boolean {
+                    runCatching { jwtProvider.getJwtVerifier().verify(token).getClaim("token")?.asString() }.fold({ it }, { return false })?.let {
+                        return ProvidersCatalog.databaseProvider.authenticationDataProvider.getUserByToken(it) != null
+                    } ?: return false
+                }
+
             }
             override val eventScheduler: EventSchedulerInterface = ProvidersCatalog.eventScheduler
             override val templatingEngine: TemplatingEngineInterface = ProvidersCatalog.templatingEngine

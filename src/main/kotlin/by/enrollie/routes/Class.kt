@@ -79,8 +79,8 @@ private fun Route.getClassIdStudents() {
             }
         } else if (studiedOn != null) {
             ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch {
-                it.getField(Roles.CLASS.STUDENT.classID) == classID && (it.roleGrantedDateTime.isBefore(studiedOn.atStartOfDay()) || it.roleGrantedDateTime.isEqual(
-                    studiedOn.atStartOfDay()
+                it.getField(Roles.CLASS.STUDENT.classID) == classID && (it.roleGrantedDateTime.isBefore(studiedOn.atStartOfDay()) || it.roleGrantedDateTime.toLocalDate().isEqual(
+                    studiedOn
                 )) && (it.roleRevokedDateTime == null || it.roleRevokedDateTime?.isAfter(studiedOn.atStartOfDay()) == true)
             }
         } else {

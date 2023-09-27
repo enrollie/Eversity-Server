@@ -10,30 +10,32 @@ package by.enrollie.impl
 
 import by.enrollie.annotations.UnsafeAPI
 import by.enrollie.data_classes.*
+import by.enrollie.extensions.filterValid
 import by.enrollie.providers.AuthorizationInterface
+import by.enrollie.providers.DatabaseProviderInterface
 import com.osohq.oso.Oso
 import java.time.LocalDate
 import java.time.LocalDateTime
 
-class AuthorizationProviderImpl : AuthorizationInterface {
+class AuthorizationProviderImpl(private val database: DatabaseProviderInterface) : AuthorizationInterface {
     class School internal constructor()
 
     companion object{
         val school = School()
     }
 
-    class LessonsProvider {
+    class LessonsProvider(private val database: DatabaseProviderInterface) {
         @Suppress("unused")
         fun getTodayLessons(user: User): List<Lesson> =
-            ProvidersCatalog.databaseProvider.lessonsProvider.getLessonsForTeacher(user.id, LocalDate.now())
+            database.lessonsProvider.getLessonsForTeacher(user.id, LocalDate.now())
     }
 
-    class TimeValidator {
+    class TimeValidator(private val database: DatabaseProviderInterface) {
         @Suppress("unused")
         fun isCurrentLesson(lesson: Lesson): Boolean {
-            val schoolClass = ProvidersCatalog.databaseProvider.classesProvider.getClass(lesson.classID) ?: return false
+            val schoolClass = database.classesProvider.getClass(lesson.classID) ?: return false
             val currentLessonPlace =
-                ProvidersCatalog.databaseProvider.timetablePlacingProvider.getTimetablePlaces().getPlace(
+                database.timetablePlacingProvider.getTimetablePlaces().getPlace(
                     LocalDateTime.now()
                 ).let {
                     if (schoolClass.shift == TeachingShift.FIRST) it.first else it.second
@@ -42,14 +44,14 @@ class AuthorizationProviderImpl : AuthorizationInterface {
         }
     }
 
-    class RolesProvider {
+    class RolesProvider(private val database: DatabaseProviderInterface) {
         @Suppress("unused")
-        fun roles(user: User) = ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.id)
+        fun roles(user: User) = database.rolesProvider.getRolesForUser(user.id).filterValid() // We don't need to let people access sensitive data after they've lost a role
 
         @OptIn(UnsafeAPI::class)
         @Suppress("unused") // Used in Oso
         fun rolesInClass(user: User, schoolClass: SchoolClass) =
-            ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.id).filter {
+            database.rolesProvider.getRolesForUser(user.id).filter {
                 if (it.role is Roles.CLASS.ClassTeacher || it.role is Roles.CLASS.AbsenceProvider || it.role is Roles.CLASS.Student) {
                     (it.unsafeGetField(Roles.CLASS.STUDENT.classID) == schoolClass.id || it.unsafeGetField(Roles.CLASS.CLASS_TEACHER.classID) == schoolClass.id || it.unsafeGetField(
                         Roles.CLASS.ABSENCE_PROVIDER.classID
@@ -71,9 +73,9 @@ class AuthorizationProviderImpl : AuthorizationInterface {
         oso.registerClass(SchoolClass::class.java, "SchoolClass")
         oso.registerClass(Lesson::class.java, "Lesson")
         oso.registerClass(Unit::class.java, "Unit")
-        oso.registerConstant(LessonsProvider(), "LessonsProvider")
-        oso.registerConstant(TimeValidator(), "TimeValidator")
-        oso.registerConstant(RolesProvider(), "RolesProvider")
+        oso.registerConstant(LessonsProvider(database), "LessonsProvider")
+        oso.registerConstant(TimeValidator(database), "TimeValidator")
+        oso.registerConstant(RolesProvider(database), "RolesProvider")
         oso.loadStr(
             (Unit::class as Any).javaClass.classLoader.getResourceAsStream("rules.polar")!!.readBytes().decodeToString()
         )

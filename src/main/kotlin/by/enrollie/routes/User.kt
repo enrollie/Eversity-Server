@@ -167,11 +167,10 @@ private fun Route.userRoles() {
                 )
                 call.attributes.put(AttributeKey("userID"), user.id)
                 call.attributes.put(AttributeKey("targetUserID"), targetUser.id)
-                ProvidersCatalog.authorization.authorize(user, "edit_roles", targetUser)
                 val roleCreationRequest = call.receive<UserRoleCreationRequest>()
                 val role = Roles.getRoleByID(roleCreationRequest.role)
-                if (role == null){
-                    if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT){
+                if (role == null) {
+                    if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT) {
                         logger.debug("Role ${roleCreationRequest.role} not found (call id: ${call.callId})")
                     }
                     return@put call.respond(HttpStatusCode.BadRequest)
@@ -193,10 +192,11 @@ private fun Route.userRoles() {
                             )
                         )
                         val existingRole = ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(id).find {
-                            it.role == role && LocalDateTime.now().isBetweenOrEqual(it.roleGrantedDateTime, it.roleRevokedDateTime ?: LocalDateTime.MAX)
+                            it.role == role && LocalDateTime.now()
+                                .isBetweenOrEqual(it.roleGrantedDateTime, it.roleRevokedDateTime ?: LocalDateTime.MAX)
                         }
                         if (existingRole != null) {
-                            if(ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT){
+                            if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT) {
                                 logger.debug("Role ${roleCreationRequest.role} already exists: $existingRole (call id: ${call.callId})")
                             }
                             return@put call.respond(existingRole)
@@ -216,10 +216,11 @@ private fun Route.userRoles() {
                             user, "edit_roles", AuthorizationProviderImpl.school
                         )
                         val existingRole = ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(id).find {
-                            it.role == role && LocalDateTime.now().isBetweenOrEqual(it.roleGrantedDateTime, it.roleRevokedDateTime ?: LocalDateTime.MAX)
+                            it.role == role && LocalDateTime.now()
+                                .isBetweenOrEqual(it.roleGrantedDateTime, it.roleRevokedDateTime ?: LocalDateTime.MAX)
                         }
                         if (existingRole != null) {
-                            if(ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT){
+                            if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT) {
                                 logger.debug("Role ${roleCreationRequest.role} already exists: $existingRole (call id: ${call.callId})")
                             }
                             return@put call.respond(existingRole)
@@ -245,10 +246,29 @@ private fun Route.userRoles() {
                     )
                 call.attributes.put(AttributeKey("userID"), user.id)
                 call.attributes.put(AttributeKey("targetUserID"), targetUser.id)
-                ProvidersCatalog.authorization.authorize(user, "edit_roles", targetUser)
                 val roleID = call.receive<Map<String, String>>()["uniqueId"] ?: return@delete call.respond(
                     HttpStatusCode.BadRequest
                 )
+                val role = ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch { it.uniqueID == roleID }
+                    .firstOrNull()
+                when (role?.role) {
+                    Roles.CLASS.ABSENCE_PROVIDER -> ProvidersCatalog.authorization.authorize(
+                        user,
+                        "edit_roles",
+                        ProvidersCatalog.databaseProvider.classesProvider.getClass(
+                            role.getField(Roles.CLASS.ABSENCE_PROVIDER.classID)
+                                ?: throw IllegalArgumentException("Role $role doesn't have 'classID' field")
+                        )
+                            ?: throw IllegalStateException("Class mentioned in role $roleID doesn't exist")
+                    )
+
+                    null -> return@delete call.respond(HttpStatusCode.BadRequest)
+                    else -> ProvidersCatalog.authorization.authorize(
+                        user,
+                        "edit_all_roles",
+                        AuthorizationProviderImpl.school
+                    )
+                }
                 ProvidersCatalog.databaseProvider.rolesProvider.revokeRole(roleID, LocalDateTime.now())
                 return@delete call.respond(HttpStatusCode.OK)
             }

@@ -38,7 +38,9 @@ object RoleUtil {
     }
 
     fun determineAvailableTemplates(rolesList: List<RoleData>): List<TemplatingEngineInterface.Template> {
-        val roles = rolesList.map { it.role }.distinct()
+        val roles = rolesList.filter {
+            LocalDateTime.now() in it.roleGrantedDateTime..(it.roleRevokedDateTime ?: LocalDateTime.MAX)
+        }.map { it.role }.distinct()
         return ProvidersCatalog.templatingEngine.availableTemplates.filter { template ->
             template.allowedRoles.any { it in roles }
         }

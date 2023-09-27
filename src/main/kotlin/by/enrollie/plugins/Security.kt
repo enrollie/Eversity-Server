@@ -23,13 +23,31 @@ import io.ktor.util.*
 interface JwtProvider {
     fun getJwtVerifier(): JWTVerifier
     fun signToken(user: User, token: String): String
+    fun signToken(userID: UserID, token: String): String
 }
 
-lateinit var jwtProvider: JwtProvider
+private object StubJwtProvider : JwtProvider {
+    override fun getJwtVerifier(): JWTVerifier {
+        throw NotImplementedError("StubJwtProvider is not implemented")
+    }
+
+    override fun signToken(user: User, token: String): String {
+        throw NotImplementedError("StubJwtProvider is not implemented")
+    }
+
+    override fun signToken(userID: UserID, token: String): String {
+        throw NotImplementedError("StubJwtProvider is not implemented")
+    }
+}
+
+private var _jwtProvider: JwtProvider? = null
+
+val jwtProvider: JwtProvider
+    get() = _jwtProvider ?: StubJwtProvider
+
 
 data class UserPrincipal(
-    val userID: UserID,
-    val token: String?
+    val userID: UserID, val token: String?
 ) : Principal {
     fun getUserFromDB() =
         ProvidersCatalog.databaseProvider.usersProvider.getUser(userID)!! // We assume that user exists in DB
@@ -40,31 +58,28 @@ internal fun Application.configureSecurity() {
         jwt("jwt") {
             val jwtAudience = ProvidersCatalog.configuration.jwtConfiguration.audience
             val secret = ProvidersCatalog.configuration.jwtConfiguration.secret
-            jwtProvider = object : JwtProvider {
+            _jwtProvider = object : JwtProvider {
                 override fun getJwtVerifier(): JWTVerifier {
                     return JWT.require(Algorithm.HMAC256(secret)).withAudience(jwtAudience).build()
                 }
 
-                override fun signToken(user: User, token: String): String {
-                    return JWT.create()
-                        .withAudience(jwtAudience)
-                        .withClaim("user", user.id)
-                        .withClaim("token", token)
+                override fun signToken(userID: UserID, token: String): String =
+                    JWT.create().withAudience(jwtAudience).withClaim("user", userID).withClaim("token", token)
                         .sign(Algorithm.HMAC256(secret))
-                }
+
+                override fun signToken(user: User, token: String): String = signToken(user.id, token)
             }
             realm = "Eversity"
             verifier(jwtProvider.getJwtVerifier())
             validate { credential ->
                 val token = credential.payload.getClaim("token").asString()
                 val userId = credential.payload.getClaim("user").asInt()
-                if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.TESTING){
+                if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.TESTING) {
                     println("User ID: $userId")
                     println("Token: $token")
                 }
                 if (ProvidersCatalog.databaseProvider.authenticationDataProvider.checkToken(
-                        token,
-                        userId
+                        token, userId
                     ) || ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.TESTING
                 ) {
                     if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.TESTING) {

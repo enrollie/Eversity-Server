@@ -16,6 +16,7 @@ import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.plugins.UserPrincipal
 import by.enrollie.privateProviders.EnvironmentInterface
 import by.enrollie.serializers.LocalDateTimeSerializer
+import com.osohq.oso.Exceptions.NotFoundException
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -29,22 +30,17 @@ import java.time.LocalDateTime
 private fun Route.queryRoles() {
     get {
         val user = call.principal<UserPrincipal>() ?: return@get call.respond(HttpStatusCode.Unauthorized)
-        ProvidersCatalog.authorization.authorize(
-            user.getUserFromDB(),
-            "read_all_roles",
-            AuthorizationProviderImpl.school
-        )
         val logger = LoggerFactory.getLogger("Routes.Roles.queryRoles")
         val role = Roles.getRoleByID(call.parameters["roleId"] ?: return@get call.respond(HttpStatusCode.BadRequest))
         if (role == null) {
-            if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT) {
+            if (ProvidersCatalog.environment.environmentType.verboseLogging()) {
                 logger.debug("Role with id ${call.parameters["roleId"]} not found")
             }
-            return@get call.respond(HttpStatusCode.NotFound)
+            return@get call.respond(HttpStatusCode.BadRequest)
         }
         val validOn = call.parameters["validOn"]?.let {
-            kotlin.runCatching {LocalDateTimeSerializer.parse(it) }.getOrNull().let { dateTime ->
-                if (dateTime == null){
+            kotlin.runCatching { LocalDateTimeSerializer.parse(it) }.getOrNull().let { dateTime ->
+                if (dateTime == null) {
                     if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT) {
                         logger.debug("Invalid date format: $it")
                     }
@@ -63,6 +59,43 @@ private fun Route.queryRoles() {
                 return@get call.respond(HttpStatusCode.BadRequest)
             }
             foundRole to it.value.first()
+        }
+        val allAccess = kotlin.runCatching {
+            ProvidersCatalog.authorization.authorize(
+                user.getUserFromDB(),
+                "read_all_roles",
+                AuthorizationProviderImpl.school
+            )
+        }.fold({ true }, { false })
+        if (!allAccess) when (role) {
+            Roles.CLASS.ABSENCE_PROVIDER -> ProvidersCatalog.authorization.authorize(
+                user.getUserFromDB(),
+                "edit_roles",
+                ProvidersCatalog.databaseProvider.classesProvider.getClass(
+                    additionalRoleData.firstOrNull { it.first == Roles.CLASS.ABSENCE_PROVIDER.classID }?.second?.toIntOrNull()
+                        ?: return@get call.respond(HttpStatusCode.BadRequest)
+                ) ?: return@get call.respond(HttpStatusCode.NotFound)
+            )
+
+            Roles.CLASS.TEACHER -> ProvidersCatalog.authorization.authorize(
+                user.getUserFromDB(),
+                "read_lessons",
+                ProvidersCatalog.databaseProvider.classesProvider.getClass(
+                    additionalRoleData.firstOrNull { it.first == Roles.CLASS.TEACHER.classID }?.second?.toIntOrNull()
+                        ?: return@get call.respond(HttpStatusCode.BadRequest)
+                ) ?: return@get call.respond(HttpStatusCode.NotFound)
+            )
+
+            Roles.CLASS.STUDENT -> ProvidersCatalog.authorization.authorize(
+                user.getUserFromDB(),
+                "read_students",
+                ProvidersCatalog.databaseProvider.classesProvider.getClass(
+                    additionalRoleData.firstOrNull { it.first == Roles.CLASS.STUDENT.classID }?.second?.toIntOrNull()
+                        ?: return@get call.respond(HttpStatusCode.BadRequest)
+                ) ?: return@get call.respond(HttpStatusCode.NotFound)
+            )
+
+            else -> throw NotFoundException() // We don't have to call "read_all_roles" check again since we already know that it's false
         }
         val roles = ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByMatch {
             (it.role == role) && ((validOn == null) || validOn.isBetweenOrEqual(

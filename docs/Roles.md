@@ -29,7 +29,7 @@ This role may be granted manually by any user that has role `CLASS.ClassTeacher`
 #### Defined additional information
 
 | ID            | Optional? | Description                                                                                                                                                                                                              |
-|---------------|-----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `classID`     | `false`   | ID of class that role was granted in                                                                                                                                                                                     |
 | `delegatedBy` | `false`   | ID of user that granted given role. _Note: This field is ignored by server if supplied by client since server assumes the user who appended role is the user who delegated this role. Client may not supply this value._ |
 
@@ -46,9 +46,9 @@ This role is granted automatically by server when student is added to class. Thi
 
 #### Defined additional information
 
-| ID          | Optional? | Description                                          |
-|-------------|-----------|------------------------------------------------------|
-| `classID`   | `false`   | ID of class that role was granted in                 |
+| ID        | Optional? | Description                          |
+| --------- | --------- | ------------------------------------ |
+| `classID` | `false`   | ID of class that role was granted in |
 
 #### Permissions granted to role
 
@@ -62,9 +62,9 @@ manually.
 
 #### Defined additional information
 
-| ID          | Optional? | Description                                          |
-|-------------|-----------|------------------------------------------------------|
-| `classID`   | `false`   | ID of class that role was granted in                 |
+| ID        | Optional? | Description                          |
+| --------- | --------- | ------------------------------------ |
+| `classID` | `false`   | ID of class that role was granted in |
 
 #### Permissions granted to role
 
@@ -81,9 +81,16 @@ This role is granted automatically by server when teacher is added to a class. T
 #### Defined additional information
 
 | ID          | Optional? | Description                                  |
-|-------------|-----------|----------------------------------------------|
+| ----------- | --------- | -------------------------------------------- |
 | `classID`   | `false`   | ID of class that role was granted in         |
 | `journalID` | `false`   | ID of a journal that this teacher is tied to |
+
+#### Permissions granted to role
+
+- `read_lessons` on class with ID `classID`
+- `read_students` on class with ID `classID`
+- `read_absence` on class with ID `classID`
+- `edit_absence` on class with ID `classID` if class's current lesson in timetable is 1 and that teacher teaches that lesson
 
 ### `SCHOOL.Administration`
 

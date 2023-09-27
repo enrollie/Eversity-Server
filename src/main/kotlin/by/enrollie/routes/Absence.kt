@@ -13,11 +13,13 @@ import by.enrollie.exceptions.AbsenceRecordsConflictException
 import by.enrollie.extensions.isBetweenOrEqual
 import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.plugins.UserPrincipal
+import by.enrollie.privateProviders.EnvironmentInterface
 import by.enrollie.providers.DatabaseAbsenceProviderInterface
 import by.enrollie.providers.DatabaseProviderInterface
 import by.enrollie.serializers.LocalDateSerializer
 import by.enrollie.util.RoleUtil
 import by.enrollie.util.parseDate
+import com.osohq.oso.Exceptions.ForbiddenException
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -147,16 +149,19 @@ private fun Route.absenceClassIDPut() {
         }
         val result: Result<AbsenceRecord> = ProvidersCatalog.databaseProvider.runInSingleTransaction { database ->
             if (!validateLessonsList(body.lessonsList, classID, body.date, database)) {
-                logger.debug("Request ${call.callId} does not have valid lessons list")
+                if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT)
+                    logger.debug("Request ${call.callId} does not have valid lessons list")
                 return@runInSingleTransaction Result.failure(IllegalArgumentException())
             }
-            database.rolesProvider.getAllRolesWithMatchingEntries(Roles.CLASS.STUDENT.classID to classID).firstOrNull {
-                it.userID == body.studentID && body.date.isBetweenOrEqual(
-                    it.roleGrantedDateTime.toLocalDate(),
-                    it.roleRevokedDateTime?.toLocalDate() ?: LocalDate.now().plusYears(1)
-                )
-            } ?: return@runInSingleTransaction Result.failure<AbsenceRecord>(NoSuchElementException()).also {
-                logger.debug("Request ${call.callId} returned 404 because subject student does not match the predicate")
+            database.rolesProvider.getAllRolesWithMatchingEntries(Roles.CLASS.STUDENT.classID to classID)
+                .firstOrNull {
+                    it.userID == body.studentID && body.date.isBetweenOrEqual(
+                        it.roleGrantedDateTime.toLocalDate(),
+                        it.roleRevokedDateTime?.toLocalDate() ?: LocalDate.now().plusYears(1)
+                    )
+                } ?: return@runInSingleTransaction Result.failure<AbsenceRecord>(NoSuchElementException()).also {
+                if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT)
+                    logger.debug("Request ${call.callId} returned 404 because subject student does not match the predicate")
             }
             val fittingRole = RoleUtil.findRoleToWriteAbsence(
                 ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.userID), classID
@@ -230,12 +235,12 @@ private fun Route.absenceClassIDPatch() {
         ProvidersCatalog.authorization.authorize(
             user.getUserFromDB(), "edit_absence", schoolClass
         )
-        val fittingRole = RoleUtil.findRoleToWriteAbsence(
-            ProvidersCatalog.databaseProvider.rolesProvider.getRolesForUser(user.userID), schoolClass.id
-        ) ?: return@patch call.respond(HttpStatusCode.Forbidden)
         val body = call.receive<AbsencePatchRequest>()
         val responseAbsence = kotlin.runCatching {
             ProvidersCatalog.databaseProvider.runInSingleTransaction { database ->
+                val fittingRole = RoleUtil.findRoleToWriteAbsence(
+                    database.rolesProvider.getRolesForUser(user.userID), schoolClass.id
+                ) ?: throw ForbiddenException()
                 val absence = database.absenceProvider.getAbsence(body.absenceID)
                     ?: throw NoSuchElementException("No absence with ID ${body.absenceID} found")
                 if (body.lessonsList == null && body.absenceType == null) {
@@ -252,7 +257,10 @@ private fun Route.absenceClassIDPatch() {
                 if (body.absenceType != null && body.absenceType != absence.absenceType) {
                     kotlin.runCatching {
                         database.absenceProvider.updateAbsence(
-                            fittingRole.uniqueID, body.absenceID, Field(AbsenceRecord::absenceType), body.absenceType
+                            fittingRole.uniqueID,
+                            body.absenceID,
+                            Field(AbsenceRecord::absenceType),
+                            body.absenceType
                         )
                     }.fold({}, {
                         throw it
@@ -268,6 +276,9 @@ private fun Route.absenceClassIDPatch() {
 
                 is IllegalArgumentException -> {
                     return@patch call.respond(HttpStatusCode.BadRequest)
+                }
+                is ForbiddenException -> {
+                    return@patch call.respond(HttpStatusCode.Forbidden)
                 }
 
                 else -> {

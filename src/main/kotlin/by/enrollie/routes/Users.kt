@@ -70,10 +70,52 @@ private fun Route.usersByRoleGet() {
         post("/byRole") {
             val user =
                 call.authentication.principal<UserPrincipal>() ?: return@post call.respond(HttpStatusCode.Unauthorized)
-            ProvidersCatalog.authorization.authorize(user.getUserFromDB(), "read_all_roles", Unit)
             val query: ByRoleQuery = Json.decodeFromString(call.receiveText())
+            val role = Roles.getRoleByID(query.roleID) ?: return@post call.respond(HttpStatusCode.BadRequest)
+            when (role) {
+                Roles.CLASS.STUDENT -> {
+                    if (query.additionalData?.get(Roles.CLASS.STUDENT.classID) == null) return@post call.respond(
+                        HttpStatusCode.BadRequest
+                    )
+                    ProvidersCatalog.authorization.authorize(
+                        user.getUserFromDB(),
+                        "read_students",
+                        ProvidersCatalog.databaseProvider.classesProvider.getClass(
+                            query.additionalData.typedGet(Roles.CLASS.STUDENT.classID)!!
+                        ) ?: return@post call.respond(HttpStatusCode.BadRequest)
+                    )
+                }
+
+                Roles.CLASS.ABSENCE_PROVIDER -> {
+                    if (query.additionalData?.get(Roles.CLASS.ABSENCE_PROVIDER.classID) == null) return@post call.respond(
+                        HttpStatusCode.BadRequest
+                    )
+                    ProvidersCatalog.authorization.authorize(
+                        user.getUserFromDB(),
+                        "edit_roles",
+                        ProvidersCatalog.databaseProvider.classesProvider.getClass(
+                            query.additionalData.typedGet(Roles.CLASS.ABSENCE_PROVIDER.classID)!!
+                        ) ?: return@post call.respond(HttpStatusCode.BadRequest)
+                    )
+                }
+
+                Roles.CLASS.TEACHER -> {
+                    if (query.additionalData?.get(Roles.CLASS.TEACHER.classID) == null) return@post call.respond(
+                        HttpStatusCode.BadRequest
+                    )
+                    ProvidersCatalog.authorization.authorize(
+                        user.getUserFromDB(),
+                        "read_lessons",
+                        ProvidersCatalog.databaseProvider.classesProvider.getClass(
+                            query.additionalData.typedGet(Roles.CLASS.TEACHER.classID)!!
+                        ) ?: return@post call.respond(HttpStatusCode.BadRequest)
+                    )
+                }
+
+                else -> ProvidersCatalog.authorization.authorize(user.getUserFromDB(), "read_all_roles", Unit)
+            }
             val userIDs: List<UserID> = ProvidersCatalog.databaseProvider.rolesProvider.getAllRolesByType(
-                Roles.getRoleByID(query.roleID) ?: return@post call.respond(HttpStatusCode.BadRequest)
+                role
             ).let { rolesList ->
                 if (query.additionalData != null) {
                     query.additionalData.getAsMap().toList().fold(rolesList) { acc, (key, value) ->
