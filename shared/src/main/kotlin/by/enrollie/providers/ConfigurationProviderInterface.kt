@@ -50,6 +50,13 @@ interface ConfigurationInterface {
          * Interval between Schools.by availability checks when last check reported that Schools.by is down
          */
         val recheckOnDownInterval: Long
+
+        /**
+         * Number of seconds since the start of the day to wait before synchronizing service database with Schools.by
+         *
+         * For example, to sync at 00:01:01 (12:01:01 AM), the value must be 61 (so, server should wait 61 second after 12 AM to sync database).
+         */
+        val resyncDelay: Long
     }
 
     val schoolsByConfiguration: SchoolsByConfigurationInterface

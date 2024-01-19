@@ -15,7 +15,7 @@ plugins {
 }
 
 group = "by.enrollie"
-val libVersion = "0.9.1"
+val libVersion = "0.10.0"
 version = libVersion
 
 repositories {
