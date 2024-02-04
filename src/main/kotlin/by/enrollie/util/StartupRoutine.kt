@@ -13,14 +13,15 @@ import by.enrollie.data_classes.EventConstraints
 import by.enrollie.data_classes.TimetableCell
 import by.enrollie.data_classes.TimetablePlaces
 import by.enrollie.exceptions.RateLimitException
-import by.enrollie.impl.ProvidersCatalog
 import by.enrollie.privateProviders.CommandLineInterface
 import by.enrollie.privateProviders.EventSchedulerInterface
+import by.enrollie.providers.ConfigurationInterface
+import by.enrollie.providers.DataSourceCommunicatorInterface
+import by.enrollie.providers.DatabaseProviderInterface
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import com.neitex.SchoolsByParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import java.time.LocalDate
@@ -33,7 +34,13 @@ object StartupRoutine {
     private const val DEFAULT_DELAY = 1_000L
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
     private val logger = LoggerFactory.getLogger(this::class.java)
-    fun initialize(schedulerInterface: EventSchedulerInterface, commandLine: CommandLineInterface) {
+    fun initialize(
+        schedulerInterface: EventSchedulerInterface,
+        commandLine: CommandLineInterface,
+        configurationInterface: ConfigurationInterface,
+        databaseProviderInterface: DatabaseProviderInterface,
+        dataSourceCommunicator: DataSourceCommunicatorInterface
+    ) {
         commandLine.registerCommand(LiteralArgumentBuilder.literal<Unit?>("exit").executes {
             logger.info("Shutting down...")
             Runtime.getRuntime().exit(0)
@@ -41,30 +48,72 @@ object StartupRoutine {
         })
         schedulerInterface.scheduleOnce(DEFAULT_DELAY) {
             coroutineScope.launch {
-                updateBellsTimetable()
+                updateBellsTimetable(databaseProviderInterface)
             }
         }.also {
             logger.debug("Startup routine scheduled, id=$it")
         }
-        val runTime = LocalDate.now().plusDays(1).atStartOfDay()
+        commandLine.registerCommand(LiteralArgumentBuilder.literal<Unit?>("resyncData").executes {
+            logger.info("Forcing data resync now...")
+            coroutineScope.launch {
+                synchronizationMaintenance(
+                    databaseProviderInterface, configurationInterface, null, dataSourceCommunicator
+                )
+            }
+            0
+        })
+        val runTime = LocalDateTime.now().let {
+            val currDaySync =
+                it.toLocalDate().atStartOfDay().plusSeconds(configurationInterface.schoolsByConfiguration.resyncDelay)
+            if (it.isAfter(currDaySync)) currDaySync.plusDays(1)
+            else currDaySync
+        }
         schedulerInterface.scheduleOnce(ChronoUnit.MILLIS.between(LocalDateTime.now(), runTime)) {
             coroutineScope.launch {
-                launch { updateBellsTimetable() }
-                ProvidersCatalog.databaseProvider.classesProvider.getClasses().forEach {
-                    logger.debug("Scheduling class ${it.id} to sync with schools.by")
-                    try {
-                        ProvidersCatalog.registrarProvider.addClassToSyncQueue(it.id)
-                    } catch (e: RateLimitException) {
-                        logger.warn("Rate limit for class ${it.id} exceeded, skipping")
-                    }
-                    delay(DEFAULT_DELAY)
-                }
-
+                synchronizationMaintenance(
+                    databaseProviderInterface, configurationInterface, schedulerInterface, dataSourceCommunicator
+                )
             }
         }
     }
 
-    private suspend fun updateBellsTimetable() {
+    private suspend fun synchronizationMaintenance(
+        databaseProvider: DatabaseProviderInterface,
+        configuration: ConfigurationInterface,
+        scheduler: EventSchedulerInterface?,
+        dataSourceCommunicator: DataSourceCommunicatorInterface
+    ) {
+        try {
+            updateBellsTimetable(databaseProvider)
+        } catch (e: Exception) {
+            logger.error("Exception thrown in updateBellsTemplate()", e)
+        }
+        logger.debug("Beginning database synchronization maintenance")
+        try {
+            databaseProvider.classesProvider.getClasses().forEach {
+                try {
+                    val syncID = dataSourceCommunicator.addClassToSyncQueue(it.id)
+                    logger.debug("Class ${it.id} (${it.title}) has been added to the sync queue (syncID=$syncID)")
+                } catch (e: RateLimitException) {
+                    logger.debug("Class ${it.id} (${it.title}) was synced recently, skipping...")
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("An exception was thrown during classes sync scheduling", e)
+        }
+        if (scheduler != null) {
+            val nextRunDateTime =
+                LocalDate.now().plusDays(1).atStartOfDay().plusSeconds(configuration.schoolsByConfiguration.resyncDelay)
+            val nextRunID = scheduler.scheduleOnce(ChronoUnit.MILLIS.between(LocalDateTime.now(), nextRunDateTime)) {
+                coroutineScope.launch {
+                    synchronizationMaintenance(databaseProvider, configuration, scheduler, dataSourceCommunicator)
+                }
+            }
+            logger.trace("Next synchronization maintenance job was scheduled with ID $nextRunID")
+        }
+    }
+
+    private suspend fun updateBellsTimetable(databaseProvider: DatabaseProviderInterface) {
         logger.debug("Beginning to update bells timetable")
         val bellsResult = SchoolsByParser.SCHOOL.getBells()
         if (bellsResult.isFailure) {
@@ -89,13 +138,13 @@ object StartupRoutine {
         }
         val timetable = TimetablePlaces(firstShift, secondShift)
         val prevHashcode = try {
-            ProvidersCatalog.databaseProvider.timetablePlacingProvider.getTimetablePlaces().hashCode()
+            databaseProvider.timetablePlacingProvider.getTimetablePlaces().hashCode()
         } catch (e: Exception) {
             logger.debug("Database seems to have no timetable, updating forcefully")
             null
         }
         if (prevHashcode != timetable.hashCode()) {
-            ProvidersCatalog.databaseProvider.timetablePlacingProvider.updateTimetablePlaces(timetable)
+            databaseProvider.timetablePlacingProvider.updateTimetablePlaces(timetable)
             logger.debug("Timetable updated")
         } else {
             logger.debug("Timetable is up to date")
