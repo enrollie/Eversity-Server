@@ -16,8 +16,8 @@ val schoolsByParserVersion: String by project
 
 plugins {
     application
-    kotlin("jvm") version "1.7.10"
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.7.10"
+    kotlin("jvm") version "1.9.22"
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.22"
     id("eu.davidea.grabver") version "2.0.2"
     id("com.github.johnrengelman.shadow") version "7.0.0"
 }
@@ -40,10 +40,7 @@ application {
 repositories {
     mavenCentral()
     maven("https://maven.pkg.jetbrains.space/public/p/ktor/eap")
-    maven {
-        url = uri("https://packages.neitex.me/releases")
-    }
-
+    maven("https://packages.neitex.me/releases")
     maven("https://libraries.minecraft.net")
 }
 
@@ -73,7 +70,7 @@ dependencies {
     implementation("io.sentry:sentry-kotlin-extensions:6.7.0")
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
     implementation("org.kodein.di:kodein-di:7.15.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
 
     implementation("com.neitex:schools_parser:$schoolsByParserVersion")
     implementation("com.github.ben-manes.caffeine:caffeine:3.1.3")
@@ -116,7 +113,7 @@ compileKotlin.dependsOn.add((tasks.getByName("processResources") as ProcessResou
 
 tasks.withType<KotlinCompile> {
     kotlinOptions {
-        jvmTarget = "16"
+        jvmTarget = "21"
     }
 }
 val compileJava: JavaCompile by tasks

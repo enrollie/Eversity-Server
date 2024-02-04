@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 /*
  * Copyright © 2021 - 2022
  * Author: Pavel Matusevich
@@ -25,9 +23,9 @@ repositories {
 
 dependencies {
     api(kotlin("stdlib"))
-    api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
-    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
-    api("org.jetbrains.kotlin:kotlin-reflect:1.7.20")
+    api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+    api("org.jetbrains.kotlin:kotlin-reflect:1.9.22")
     api("io.ktor:ktor-server-core:2.1.1")
     api("io.ktor:ktor-server-websockets-jvm:2.1.1")
     api("com.mojang:brigadier:1.0.18")

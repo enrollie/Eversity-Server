@@ -12,7 +12,7 @@ Server of Eversity Project. Uses [Schools.by](https://schools.by/) as main data 
 
 ## Requirements
 
-- JRE 16+
+- JRE 21+
 - School that is connected to and using [Schools.by](https://schools.by/)
 - Be sure to provide consistent internet connection (in case you set it up in school)
 - Any reverse proxy (we recommend using [nginx](https://www.nginx.com/)) with valid SSL certificate
