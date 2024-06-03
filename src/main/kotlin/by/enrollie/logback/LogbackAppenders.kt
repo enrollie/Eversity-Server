@@ -22,7 +22,13 @@ class IntelliJLikeLayoutWithoutColors : PatternLayout() {
     override fun doLayout(event: ILoggingEvent?): String? {
         event ?: return null
         val timestamp = DateTime.now().toString("YYYY-MM-dd HH:mm:ss,SSS")
-        return "$timestamp [${event.threadName}]   ${event.level.levelStr} - ${event.loggerName} - ${event.formattedMessage}\n".let {
+        return "$timestamp [${event.threadName}]   ${event.level.levelStr} - ${event.loggerName} - ${event.formattedMessage}${
+            if (event.mdcPropertyMap.isNotEmpty()) " ${
+                event.mdcPropertyMap.toList().joinToString(separator = ", ", prefix = "(", postfix = ")"){
+                    "${it.first}: `${it.second}`"
+                }
+            }" else ""
+        }\n".let {
             (if (event.throwableProxy != null) {
                 it + "\t" + ThrowableProxyUtil.asString(event.throwableProxy)
             } else it)
@@ -44,9 +50,15 @@ class IntelliJLikeLayout : PatternLayout() {
             Level.ALL_INT -> event.level.levelStr
             else -> error("Unknown event level int ${event.level.levelInt}")
         }
-        return "${TextColors.green(timestamp)} [${event.threadName}]   $levelColor - ${event.loggerName} - ${event.formattedMessage}".let {
+        return "${TextColors.green(timestamp)} [${event.threadName}]   $levelColor - ${event.loggerName} - ${event.formattedMessage}${
+            if (event.mdcPropertyMap.isNotEmpty()) " ${
+                event.mdcPropertyMap.toList().joinToString(separator = ", ", prefix = "(", postfix = ")"){
+                    "${it.first}: `${it.second}`"
+                }
+            }" else ""
+        }".let {
             (if (event.throwableProxy != null) {
-                it + "\t" + ThrowableProxyUtil.asString(event.throwableProxy).trimIndent()
+                it + "\n\t" + ThrowableProxyUtil.asString(event.throwableProxy).trimIndent()
             } else it)
         }
     }

@@ -22,12 +22,14 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import com.neitex.SchoolsByParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.temporal.ChronoUnit
+import kotlin.time.Duration.Companion.seconds
 
 @UnsafeAPI
 object StartupRoutine {
@@ -68,11 +70,14 @@ object StartupRoutine {
             if (it.isAfter(currDaySync)) currDaySync.plusDays(1)
             else currDaySync
         }
-        schedulerInterface.scheduleOnce(ChronoUnit.MILLIS.between(LocalDateTime.now(), runTime)) {
-            coroutineScope.launch {
-                synchronizationMaintenance(
-                    databaseProviderInterface, configurationInterface, schedulerInterface, dataSourceCommunicator
-                )
+        if (System.getenv()["EVERSITY_ENABLE_SYNC"] != null) {
+            logger.warn("EVERSITY_ENABLE_SYNC is set. Automatic synchronization will be performed according to configuration. Use at your own risk.")
+            schedulerInterface.scheduleOnce(ChronoUnit.MILLIS.between(LocalDateTime.now(), runTime)) {
+                coroutineScope.launch {
+                    synchronizationMaintenance(
+                        databaseProviderInterface, configurationInterface, schedulerInterface, dataSourceCommunicator
+                    )
+                }
             }
         }
     }
@@ -97,6 +102,7 @@ object StartupRoutine {
                 } catch (e: RateLimitException) {
                     logger.debug("Class ${it.id} (${it.title}) was synced recently, skipping...")
                 }
+                delay(60.seconds.inWholeMilliseconds)
             }
         } catch (e: Exception) {
             logger.error("An exception was thrown during classes sync scheduling", e)

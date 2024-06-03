@@ -31,12 +31,16 @@ import io.sentry.kotlin.SentryContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import java.time.LocalDateTime
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
-class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface, private val environment: EnvironmentInterface) : DataSourceCommunicatorInterface {
+class DataSourceCommunicatorImpl(
+    private val database: DatabaseProviderInterface, private val environment: EnvironmentInterface
+) : DataSourceCommunicatorInterface {
     private val registerUUIDs = ConcurrentHashMap<String, Pair<UserID, Credentials>>(100)
     private val usersJobsBroadcaster = MutableSharedFlow<Triple<UserID, Credentials, String>>(0, 5)
     private val processingUsers = ConcurrentSet<UserID>()
@@ -47,7 +51,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
     private val rateLimitClassList = ConcurrentSet<ClassID>()
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val scope = CoroutineScope(Dispatchers.IO.limitedParallelism(20))
+    private val scope = CoroutineScope(Dispatchers.IO.limitedParallelism(1))
     private val broadcaster = MutableSharedFlow<DataSourceCommunicatorInterface.Message>(15, 500)
     private val logger = LoggerFactory.getLogger(DataSourceCommunicatorImpl::class.java)
 
@@ -73,8 +77,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
     }
 
     private fun rateLimitClass(classID: ClassID): Boolean {
-        if (rateLimitClassList.contains(classID))
-            return false
+        if (rateLimitClassList.contains(classID)) return false
         rateLimitClassList.add(classID)
         scope.launch {
             delay(900000L) // 15 minutes
@@ -87,8 +90,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
         if (processingClasses.contains(classID)) {
             return syncUUIDs.entries.first { it.value.first == classID }.key
         }
-        if (!rateLimitClass(classID))
-            throw RateLimitException("Class has already been synced recently")
+        if (!rateLimitClass(classID)) throw RateLimitException("Class has already been synced recently")
         processingClasses.add(classID)
         val uuid = "c-${UUID.randomUUID()}"
         syncUUIDs[uuid] = Pair(classID, schoolsByCredentials)
@@ -118,11 +120,11 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
         (scope + handler).launch {
             usersJobsBroadcaster.collect {
                 delay(500)
-                launch(handler + SentryContext()) {
+                launch(handler + SentryContext() + MDCContext(mapOf("uuid" to it.third, "userID" to it.first.toString()))) {
                     try {
                         registerUser(it.first, it.second, it.third)
                     } catch (e: Exception) {
-                        logger.error("Error while registering user ${it.first} (uuid=${it.third}, uncaught)", e)
+                        logger.error("Error while registering user ${it.first} (uncaught)", e)
                         Sentry.captureException(e, Hint())
                         broadcaster.emit(errorMessage(it.third, exception = e))
                     } finally {
@@ -134,22 +136,28 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
         }
         (scope + handler).launch {
             classSyncJobsBroadcaster.collect {
-                logger.debug("Syncing class ${it.first} (uuid=${it.third})")
-                delay(500)
-                launch(handler + SentryContext()) {
+                launch(
+                    handler + SentryContext() + MDCContext(
+                        mapOf(
+                            "uuid" to it.third, "classID" to it.first.toString()
+                        )
+                    )
+                ) {
+                    logger.debug("Syncing class ${it.first}")
                     try {
                         syncClass(it.first, it.second, it.third)
+                        logger.debug("Class ${it.first} has been synced")
                     } catch (e: Exception) {
                         logger.error("Error while syncing class ${it.first} (uuid=${it.third}, uncaught)", e)
                         Sentry.captureException(e, Hint())
                         broadcaster.emit(errorMessage(it.third, exception = e))
                         rateLimitClassList.remove(it.first)
                     } finally {
-                        logger.debug("Class ${it.first} has been synced")
                         syncUUIDs.remove(it.third)
                         processingClasses.remove(it.first)
                     }
                 }
+                delay(200)
             }
         }
     }
@@ -186,8 +194,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                     logger.error(
                         "Error while checking cookies for class teacher ${roleData.userID} of class $classID", it
                     )
-                    if (it !is SchoolsByUnavailable)
-                        Sentry.captureException(it, Hint())
+                    if (it !is SchoolsByUnavailable) Sentry.captureException(it, Hint())
                 })
             }
         }
@@ -209,7 +216,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                 }
                 SchoolsByParser.AUTH.checkCookies(credentials).fold({ valid ->
                     if (valid) return credentials else {
-                        logger.debug("Credentials $credentials are not valid")
+                        logger.debug("Credentials {} are not valid", credentials)
                         database.customCredentialsProvider.clearCredentials(
                             roleData.userID, "schools-csrfToken"
                         )
@@ -221,12 +228,15 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                     logger.error(
                         "Error while checking cookies for administrator ${roleData.userID}", it
                     )
-                    if (it !is SchoolsByUnavailable)
-                        Sentry.captureException(it, Hint())
+                    if (it !is SchoolsByUnavailable) Sentry.captureException(it, Hint())
                 })
             }
         }
         return null
+    }
+
+    private fun emitBroadcastMessage(message: DataSourceCommunicatorInterface.Message) = scope.launch {
+        broadcaster.emit(message)
     }
 
     private fun invalidateCredentialsForClassTeachers(classID: ClassID) {
@@ -239,16 +249,39 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
         }
     }
 
-
     private suspend fun syncClass(classID: ClassID, optionalCredentials: Credentials?, uuid: String) {
         logger.debug("Syncing class $classID (uuid=$uuid)")
         val badCredentialsMessage = "Учётные данные не подошли, пытаемся найти другие..."
         val attemptedCredentials = mutableListOf<Credentials>()
         val totalSteps = 6
         while (true) {
-            delay(500)
             var step = 1
-            logger.debug("Syncing class $classID (uuid=$uuid): step $step/$totalSteps")
+            fun <T : Any?> errorHandler(
+                userMsg: String, errorMsgFmt: String, vararg fmt: Any
+            ): (Throwable) -> T? {
+                return f@{
+                    if (it is BadSchoolsByCredentials) {
+                        logger.warn("Bad credentials for class $classID")
+                        emitBroadcastMessage(
+                            DataSourceCommunicatorInterface.Message(
+                                uuid,
+                                DataSourceCommunicatorInterface.MessageType.INFORMATION,
+                                badCredentialsMessage,
+                                step,
+                                totalSteps,
+                                mapOf()
+                            )
+                        )
+                        return@f null
+                    }
+                    logger.error(errorMsgFmt.format(fmt), it)
+                    emitBroadcastMessage(errorMessage(uuid, userMsg, it))
+                    null
+                }
+            }
+            delay(500)
+            MDC.put("step", step.toString())
+            MDC.put("totalSteps", totalSteps.toString())
             broadcaster.emit(
                 DataSourceCommunicatorInterface.Message(
                     uuid,
@@ -264,7 +297,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                     classID, attemptedCredentials
                 )
             if (credentials == null) {
-                logger.error("No credentials found for class $classID")
+                logger.error("No credentials found")
                 broadcaster.emit(
                     errorMessage(
                         uuid, "Не удалось найти подходящие учетные данные для синхронизации класса"
@@ -274,10 +307,9 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                 return
             }
             attemptedCredentials.add(credentials)
-            val clazz =
-                database.classesProvider.getClass(classID) ?: throw IllegalArgumentException(
-                    "Class $classID not found"
-                )
+            val clazz = database.classesProvider.getClass(classID) ?: throw IllegalArgumentException(
+                "Class $classID not found"
+            )
             broadcaster.emit(
                 DataSourceCommunicatorInterface.Message(
                     uuid,
@@ -289,57 +321,19 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                 )
             )
             val newClassData = SchoolsByParser.CLASS.getClassData(classID, credentials).fold({
-                if (it.classTitle != clazz.title) database.classesProvider.updateClass(
-                    classID, Field(SchoolClass::title), it.classTitle
-                )
-                // We are replacing class teachers later (near the end of this function)
-                it
-            }, {
-                if (it is BadSchoolsByCredentials) {
-                    logger.error("Bad credentials for class $classID")
-                    broadcaster.emit(
-                        DataSourceCommunicatorInterface.Message(
-                            uuid,
-                            DataSourceCommunicatorInterface.MessageType.INFORMATION,
-                            badCredentialsMessage,
-                            1,
-                            totalSteps,
-                            mapOf()
-                        )
+                    if (it.classTitle != clazz.title) database.classesProvider.updateClass(
+                        classID, Field(SchoolClass::title), it.classTitle
                     )
-                    return@fold null
-                }
-                logger.error("Error while getting class data for class $classID", it)
-                broadcaster.emit(
-                    errorMessage(
-                        uuid, "Ошибка при получении основной информации о классе", it
-                    )
+                    // We are replacing class teachers later (near the end of this function)
+                    it
+                }, errorHandler(
+                    "Не удалось получить данные о классе. Попробуйте связаться с администратором системы.",
+                    "Failed to get class"
                 )
-                null
-            }) ?: continue
+            ) ?: continue
             SchoolsByParser.CLASS.getClassShift(classID, credentials).fold({
                 if (it) TeachingShift.SECOND else TeachingShift.FIRST
-            }, {
-                if (it is BadSchoolsByCredentials) {
-                    logger.error("Bad credentials for class $classID")
-                    broadcaster.emit(
-                        DataSourceCommunicatorInterface.Message(
-                            uuid,
-                            DataSourceCommunicatorInterface.MessageType.INFORMATION,
-                            badCredentialsMessage,
-                            1,
-                            totalSteps,
-                            mapOf()
-                        )
-                    )
-                    invalidateCredentialsForClassTeachers(classID)
-                    return@fold null
-                }
-                Sentry.captureException(it)
-                broadcaster.emit(errorMessage(uuid))
-                logger.error("Error while getting class shift (uuid=$uuid, classID=${classID})", it)
-                return@fold null
-            })?.also {
+            }, errorHandler("Не удалось получить смену класса", "Failed to get teaching shift"))?.also {
                 step++
                 database.classesProvider.updateClass(classID, Field(SchoolClass::shift), it)
             } ?: continue
@@ -359,9 +353,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                     list.filter { mappedExisting.containsKey(it.subgroupID) && mappedExisting[it.subgroupID]!!.title != it.title }
                         .takeIf { it.isNotEmpty() }?.forEach {
                             database.lessonsProvider.updateSubgroup(
-                                it.subgroupID,
-                                Field(Subgroup::title),
-                                it.title
+                                it.subgroupID, Field(Subgroup::title), it.title
                             )
                         }
                     val new = list.filter { !mappedExisting.containsKey(it.subgroupID) }.takeIf { it.isNotEmpty() }
@@ -384,27 +376,8 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                     existing.filter { it.id !in mappedDeleted }.plus(new ?: listOf())
                 }
                 list
-            }, {
-                if (it is BadSchoolsByCredentials) {
-                    logger.error("Bad credentials for class $classID")
-                    broadcaster.emit(
-                        DataSourceCommunicatorInterface.Message(
-                            uuid,
-                            DataSourceCommunicatorInterface.MessageType.INFORMATION,
-                            badCredentialsMessage,
-                            1,
-                            totalSteps,
-                            mapOf()
-                        )
-                    )
-                    invalidateCredentialsForClassTeachers(classID)
-                    return@fold null
-                }
-                Sentry.captureException(it)
-                broadcaster.emit(errorMessage(uuid))
-                logger.error("Error while getting subgroups (uuid=$uuid, classID=${classID})", it)
-                null
-            })?.distinctBy { it.subgroupID } ?: continue
+            }, errorHandler("Не удалось получить данные подгрупп.", "Failed to get subgroups"))
+                ?.distinctBy { it.subgroupID } ?: continue
             SchoolsByParser.CLASS.getPupilsList(classID, credentials).fold({ pupilsList ->
                 val existingUsers = database.usersProvider.getUsers().map { it.id }.toHashSet()
                 pupilsList.filterNot { it.id in existingUsers }.takeIf { it.isNotEmpty() }?.let { pupilList ->
@@ -430,27 +403,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                 }.forEach {
                     database.rolesProvider.revokeRole(it.uniqueID, LocalDateTime.now())
                 }
-            }, {
-                if (it is BadSchoolsByCredentials) {
-                    logger.error("Bad credentials for class $classID")
-                    broadcaster.emit(
-                        DataSourceCommunicatorInterface.Message(
-                            uuid,
-                            DataSourceCommunicatorInterface.MessageType.INFORMATION,
-                            badCredentialsMessage,
-                            1,
-                            totalSteps,
-                            mapOf()
-                        )
-                    )
-                    invalidateCredentialsForClassTeachers(classID)
-                    return@fold null
-                }
-                Sentry.captureException(it)
-                broadcaster.emit(errorMessage(uuid))
-                logger.error("Error while getting pupils list (uuid=$uuid, classID=${classID})", it)
-                null
-            }) ?: continue
+            }, errorHandler("Не удалось получить список учащихся", "Failed to get students list")) ?: continue
             database.classesProvider.getSubgroups(classID).let { subgroupList ->
                 subgroupList.forEach { subgroup ->
                     if (subgroups.first { it.subgroupID == subgroup.id }.pupils != subgroup.members) {
@@ -488,47 +441,20 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                         it.subgroup
                     )
                 })
-                database.lessonsProvider.getLessonsForClass(classID)
-                    .filter { it.id !in mappedIDs }.also { deletedLessons ->
+                database.lessonsProvider.getLessonsForClass(classID).filter { it.id !in mappedIDs }
+                    .also { deletedLessons ->
                         database.lessonsProvider.deleteLessons(deletedLessons.map { it.id })
                     }
                 list
-            }, {
-                if (it is BadSchoolsByCredentials) {
-                    logger.error("Bad credentials for class $classID")
-                    broadcaster.emit(errorMessage(uuid, badCredentialsMessage))
-                    invalidateCredentialsForClassTeachers(classID)
-                    return@fold null
-                }
-                Sentry.captureException(it)
-                broadcaster.emit(errorMessage(uuid))
-                logger.error("Error while getting lessons (uuid=$uuid, classID=${classID})", it)
-                null
-            }) ?: continue
-            SchoolsByParser.CLASS.getPupilsOrdering(classID, credentials).fold({ ordering ->
-                database.classesProvider.setPupilsOrdering(classID,
-                    ordering.map { it.first to it.second.toInt() })
-            }, {
-                if (it is BadSchoolsByCredentials) {
-                    logger.error("Bad credentials for class $classID")
-                    broadcaster.emit(
-                        DataSourceCommunicatorInterface.Message(
-                            uuid,
-                            DataSourceCommunicatorInterface.MessageType.INFORMATION,
-                            badCredentialsMessage,
-                            1,
-                            totalSteps,
-                            mapOf()
-                        )
-                    )
-                    invalidateCredentialsForClassTeachers(classID)
-                    return@fold null
-                }
-                Sentry.captureException(it)
-                broadcaster.emit(errorMessage(uuid))
-                logger.error("Error while getting pupils ordering (uuid=$uuid, classID=${classID})", it)
-                null
-            }) ?: continue
+            }, errorHandler("Не удалось получить список уроков.", "Failed to get lessons list")) ?: continue
+            SchoolsByParser.CLASS.getPupilsOrdering(classID, credentials).fold(
+                { ordering ->
+                    database.classesProvider.setPupilsOrdering(classID, ordering.map { it.first to it.second.toInt() })
+                }, errorHandler(
+                    "Не удалось получить порядок учащихся в классе. Убедитесь, что он существует и он правильный",
+                    "Failed to get students ordering"
+                )
+            ) ?: continue
             broadcaster.emit(
                 DataSourceCommunicatorInterface.Message(
                     uuid,
@@ -566,12 +492,12 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
             )
             break
         }
+        MDC.clear()
     }
 
     private suspend fun registerUser(userID: UserID, credentials: Credentials, uuid: String) {
         Sentry.addBreadcrumb(Breadcrumb.debug("Beginning registration with ID $uuid"))
-        logger.debug("Beginning registration with ID $uuid")
-
+        logger.debug("Beginning registration")
         val user = SchoolsByParser.USER.getBasicUserInfo(userID, credentials).fold({
             broadcaster.emit(
                 DataSourceCommunicatorInterface.Message(
@@ -595,6 +521,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
             logger.error("Error while getting user info (uuid=$uuid)", it)
             return
         })
+        MDC.put("userType", user.type.name)
         when (user.type) {
             SchoolsByUserType.PARENT -> {
                 broadcaster.emit(
@@ -618,23 +545,18 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
             }
 
             SchoolsByUserType.TEACHER, SchoolsByUserType.ADMINISTRATION, SchoolsByUserType.DIRECTOR -> {
-                val totalTeacherSteps = 9
+                val totalSteps = 9
                 var currentStep = 2
                 broadcaster.emit(
                     DataSourceCommunicatorInterface.Message(
-                        uuid,
-                        DataSourceCommunicatorInterface.MessageType.INFORMATION,
-                        "Судя по всему, вы ${
+                        uuid, DataSourceCommunicatorInterface.MessageType.INFORMATION, "Судя по всему, вы ${
                             when (user.type) {
                                 SchoolsByUserType.TEACHER -> "учитель"
                                 SchoolsByUserType.ADMINISTRATION -> "часть администрации"
                                 SchoolsByUserType.DIRECTOR -> "директор"
                                 else -> throw IllegalStateException("The world is broken, unfortunately")
                             }
-                        }. Ищем ваш класс...",
-                        currentStep,
-                        totalTeacherSteps,
-                        mapOf()
+                        }. Ищем ваш класс...", currentStep, totalSteps, mapOf()
                     )
                 )
                 val schoolClass = SchoolsByParser.TEACHER.getClassForTeacher(userID, credentials, user.type).fold({
@@ -654,7 +576,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                             DataSourceCommunicatorInterface.MessageType.INFORMATION,
                             "Нашли ваш ${schoolClass.classTitle} класс, узнаём смену класса...",
                             currentStep,
-                            totalTeacherSteps,
+                            totalSteps,
                             mapOf()
                         )
                     )
@@ -674,7 +596,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                             DataSourceCommunicatorInterface.MessageType.INFORMATION,
                             "${schoolClass.classTitle} класс, учится в${if (shift == TeachingShift.SECOND) "о второй смене" else " первой смене"}. Ищем учеников...",
                             currentStep,
-                            totalTeacherSteps,
+                            totalSteps,
                             mapOf()
                         )
                     )
@@ -694,7 +616,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                             DataSourceCommunicatorInterface.MessageType.INFORMATION,
                             "Нашли ${pupils.size} учеников, ищем их расположение в списке...",
                             currentStep,
-                            totalTeacherSteps,
+                            totalSteps,
                             mapOf()
                         )
                     )
@@ -714,7 +636,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                             DataSourceCommunicatorInterface.MessageType.INFORMATION,
                             "Нашли расположение учеников в списке. Ищем расписание класса...",
                             currentStep,
-                            totalTeacherSteps,
+                            totalSteps,
                             mapOf()
                         )
                     )
@@ -756,7 +678,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                             DataSourceCommunicatorInterface.MessageType.INFORMATION,
                             "Нашли расписание класса, ищем историю перемещений учеников между классами...",
                             currentStep,
-                            totalTeacherSteps,
+                            totalSteps,
                             mapOf()
                         )
                     )
@@ -777,7 +699,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                             DataSourceCommunicatorInterface.MessageType.INFORMATION,
                             "Нашли историю перемещений учеников между классами, регистрируем класс...",
                             currentStep,
-                            totalTeacherSteps,
+                            totalSteps,
                             mapOf()
                         )
                     )
@@ -815,10 +737,7 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                             setJournalTitles(journalTitles)
                             createSubgroups(subgroups.map {
                                 Subgroup(
-                                    it.subgroupID,
-                                    it.title,
-                                    schoolClass.id,
-                                    it.pupils
+                                    it.subgroupID, it.title, schoolClass.id, it.pupils
                                 )
                             })
                             createOrUpdateLessons(lessons)
@@ -833,11 +752,11 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                             DataSourceCommunicatorInterface.MessageType.INFORMATION,
                             "Ваш ${schoolClass.classTitle} уже зарегистрирован, назначаем вас руководителем...",
                             currentStep,
-                            totalTeacherSteps,
+                            totalSteps,
                             mapOf()
                         )
                     )
-                    database.runInSingleTransaction {database->
+                    database.runInSingleTransaction { database ->
                         database.usersProvider.createUser(
                             User(
                                 userID, Name.fromParserName(user.name)
@@ -861,15 +780,14 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                         uuid,
                         DataSourceCommunicatorInterface.MessageType.INFORMATION,
                         "Завершаем регистрацию...",
-                        totalTeacherSteps,
-                        totalTeacherSteps,
+                        totalSteps,
+                        totalSteps,
                         mapOf()
                     )
                 )
                 if (user.type == SchoolsByUserType.ADMINISTRATION || user.type == SchoolsByUserType.DIRECTOR) {
                     Sentry.addBreadcrumb(Breadcrumb.info("User is a part of school administration"))
-                    if (environment.environmentType.verboseLogging())
-                        logger.debug("User is a part of school administration (uuid=$uuid, userID=$userID), creating administration role")
+                    if (environment.environmentType.verboseLogging()) logger.debug("User is a part of school administration (uuid=$uuid, userID=$userID), creating administration role")
                     database.rolesProvider.appendRoleToUser(
                         userID, DatabaseRolesProviderInterface.RoleCreationData(
                             userID, Roles.SCHOOL.ADMINISTRATION, RoleInformationHolder()
@@ -890,11 +808,10 @@ class DataSourceCommunicatorImpl(private val database: DatabaseProviderInterface
                         uuid,
                         DataSourceCommunicatorInterface.MessageType.AUTHENTICATION,
                         "Регистрация завершена, добро пожаловать!",
-                        totalTeacherSteps,
-                        totalTeacherSteps,
+                        totalSteps,
+                        totalSteps,
                         mapOf(
-                            "userId" to userID.toString(),
-                            "token" to jwtProvider.signToken(userID, token.token)
+                            "userId" to userID.toString(), "token" to jwtProvider.signToken(userID, token.token)
                         )
                     )
                 )

@@ -32,13 +32,10 @@ import io.sentry.Breadcrumb
 import io.sentry.Sentry
 import io.sentry.SentryLevel
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.time.LocalDateTime
-
-private val isStressTestMode = System.getenv("EVERSITY_STRESS_TEST_MODE")?.toBooleanStrictOrNull() ?: false
 
 private fun Route.login() {
     post("/login") {
@@ -55,11 +52,6 @@ private fun Route.login() {
             return@post call.respond(HttpStatusCode.ServiceUnavailable)
         }
         val (username, password) = Json.decodeFromString<LoginRequest>(call.receiveText())
-        if (isStressTestMode) {
-            return@post call.respond(
-                HttpStatusCode.OK, LoginResponse(0, "STRESS_TEST_MODE---NO_DATA_WAS_SENT_TO_SCHOOLS_BY")
-            )
-        }
         val result = SchoolsByParser.AUTH.getLoginCookies(username, password)
         when (result.isSuccess) {
             true -> {
@@ -197,7 +189,12 @@ private fun Route.userRoles() {
                         }
                         if (existingRole != null) {
                             if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT) {
-                                logger.debug("Role ${roleCreationRequest.role} already exists: $existingRole (call id: ${call.callId})")
+                                logger.debug(
+                                    "Role {} already exists: {} (call id: {})",
+                                    roleCreationRequest.role,
+                                    existingRole,
+                                    call.callId
+                                )
                             }
                             return@put call.respond(existingRole)
                         }
@@ -221,7 +218,12 @@ private fun Route.userRoles() {
                         }
                         if (existingRole != null) {
                             if (ProvidersCatalog.environment.environmentType == EnvironmentInterface.EnvironmentType.DEVELOPMENT) {
-                                logger.debug("Role ${roleCreationRequest.role} already exists: $existingRole (call id: ${call.callId})")
+                                logger.debug(
+                                    "Role {} already exists: {} (call id: {})",
+                                    roleCreationRequest.role,
+                                    existingRole,
+                                    call.callId
+                                )
                             }
                             return@put call.respond(existingRole)
                         }

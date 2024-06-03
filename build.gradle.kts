@@ -71,6 +71,8 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
     implementation("org.kodein.di:kodein-di:7.15.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:1.7.3")
 
     implementation("com.neitex:schools_parser:$schoolsByParserVersion")
     implementation("com.github.ben-manes.caffeine:caffeine:3.1.3")
@@ -124,7 +126,7 @@ tasks.processResources {
 version = versioning.name
 
 tasks.register("cleanResources") {
-    delete("$buildDir/resources")
+    delete("${layout.buildDirectory}/resources")
     didWork = true
 }
 val shadowJar: ShadowJar by tasks

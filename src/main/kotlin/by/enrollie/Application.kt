@@ -69,9 +69,15 @@ fun main() {
             override val environmentVariables: Map<String, String> = System.getenv()
         } to selfProperties.getProperty("schoolsByParserVersion"))
     }
-    logger.info("Starting Eversity Server ${metadata.serverVersion}#${metadata.serverBuildID} (built on: ${DateTime(metadata.serverBuildTimestamp * 1000)}) on ${metadata.systemName} (server name: ${metadata.serverName})...")
+    logger.info(
+        "Starting Eversity Server ${metadata.serverVersion}#${metadata.serverBuildID} (built on: ${
+            DateTime(
+                metadata.serverBuildTimestamp * 1000
+            )
+        }) on ${metadata.systemName} (server name: ${metadata.serverName})..."
+    )
     logger.debug("Server API version: ${metadata.serverApiVersion}")
-logger.debug("SchoolsBy parser version: $schoolsByParserVersion")
+    logger.debug("SchoolsBy parser version: $schoolsByParserVersion")
     println(getBootstrapText(metadata))
     val pluginsCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     runBlocking { // Configure providers
@@ -148,7 +154,8 @@ logger.debug("SchoolsBy parser version: $schoolsByParserVersion")
             bindSingleton<EnvironmentInterface> { metadata }
             bindSingleton<CommandLineInterface> { CommandLine.instance }
             bindSingleton<AuthorizationInterface> {
-                AuthorizationProviderImpl(instance()) }
+                AuthorizationProviderImpl(instance())
+            }
             bindSingleton<PluginsProviderInterface> { PluginsProviderImpl(plugins) }
             bindSingleton<EventSchedulerInterface> { EventSchedulerImpl() }
             bindSingleton<SchoolsByMonitorInterface> { SchoolsByMonitorImpl(instance(), instance(), instance()) }
@@ -174,8 +181,7 @@ logger.debug("SchoolsBy parser version: $schoolsByParserVersion")
             val disableSending =
                 System.getenv()["EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY"]?.toBooleanStrictOrNull() == true
             val sentryLogger = LoggerFactory.getLogger("Sentry")
-            if (disableSending)
-                sentryLogger.warn("EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY is set to true. All exceptions will be logged, but not sent to Sentry.")
+            if (disableSending) sentryLogger.warn("EVERSITY_DO_NOT_SEND_EXCEPTIONS_TO_SENTRY is set to true. All exceptions will be logged, but not sent to Sentry.")
             setBeforeSend { event, hint ->
                 if (disableSending) return@setBeforeSend null
                 if (event.throwable is SchoolsByUnavailable) {
@@ -195,11 +201,12 @@ logger.debug("SchoolsBy parser version: $schoolsByParserVersion")
         it.setTag("environment", metadata.environmentType.name)
         it.setTag("server-api-version", metadata.serverApiVersion)
     }
-    if (System.getenv()["EVERSITY_STRESS_TEST_MODE"]?.toBooleanStrictOrNull() == true) {
-        logger.warn("EVERSITY_STRESS_TEST_MODE is set to true. This server will be running in stress test mode. Communications with outside services using user-supplied data will be minimized. (though, some plugins may not respect this mode)")
-    }
     logger.debug("Starting server...")
-    @OptIn(UnsafeAPI::class) StartupRoutine.initialize(ProvidersCatalog.eventScheduler, ProvidersCatalog.commandLine)
+    with(ProvidersCatalog) {
+        @OptIn(UnsafeAPI::class) StartupRoutine.initialize(
+            eventScheduler, commandLine, configuration, databaseProvider, registrarProvider
+        )
+    }
     Runtime.getRuntime().addShutdownHook(by.enrollie.util.ShutdownHook())
     val port = ProvidersCatalog.environment.environmentVariables["EVERSITY_PORT"]?.toIntOrNull() ?: 8080
 
